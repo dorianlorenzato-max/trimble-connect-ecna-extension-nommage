@@ -1,0 +1,8 @@
+{
+  "icon": "https://dorianlorenzato-max.github.io/trimble-connect-ecna-extension/logoEiffage.png",
+  "title": "ECNA_Nommage_Docs",
+  "url": "https://dorianlorenzato-max.github.io/trimble-connect-ecna-extension-nommage/index.html",
+  "description": "Extension d'aide et de contrôle du nommage des documents pour ECNA chez Eiffage Construction",
+  "configCommand": "",
+  "enabled": false
+}

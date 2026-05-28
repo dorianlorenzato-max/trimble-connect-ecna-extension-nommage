@@ -1,1 +1,2 @@
-# trimble-connect-ecna-extension-nommage
+# trimble-connect-ecna-extension
+Extension ECNA pour Trimble Connect
