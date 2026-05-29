@@ -121,3 +121,79 @@ body {
 .message-container h2 {
   margin-top: 0;
 }
+.config-actions {
+  display: flex;
+  justify-content: center; /* <== AJOUTEZ CETTE LIGNE */
+  gap: 20px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+/* === PAGE DE CRÉATION DE CODIFICATION === */
+.naming-rule-creation-container {
+  max-width: 900px;
+  margin: 0 auto;
+  background-color: #fff;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.naming-rule-actions {
+  display: flex;
+  gap: 15px;
+  margin: 25px 0;
+  padding-bottom: 25px;
+  border-bottom: 1px solid #eee;
+}
+
+.naming-rule-preview-container {
+  margin: 25px 0;
+}
+
+.naming-rule-preview-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.naming-rule-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.naming-rule-preview-table th,
+.naming-rule-preview-table td {
+  border: 1px solid #ccc;
+  padding: 12px;
+  vertical-align: top;
+}
+
+.naming-rule-preview-table th {
+  background-color: #f2f2f2;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 30px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+}
+
+.form-section label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.form-section input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 1rem;
+}
