@@ -287,7 +287,7 @@ import {
       // 5. Fournir un retour à l'utilisateur
       renderSuccess(
         mainContentDiv,
-        `La codification "${ruleName}" a été enregistrée avec succès.`,
+        `La codification "${currentRuleState.name}" a été enregistrée avec succès.`,
       );
 
       // Revenir à la page de configuration après un court délai
