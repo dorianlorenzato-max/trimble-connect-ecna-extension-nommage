@@ -198,6 +198,8 @@ import {
       document
         .getElementById("add-column-btn")
         .addEventListener("click", () => {
+          currentRuleState.name =
+            document.getElementById("naming-rule-name").value;
           // Affiche la modale et lui passe la fonction de callback
           renderAddColumnModal(onColumnAdd);
         });
@@ -247,9 +249,13 @@ import {
       const finalConfigurationData = existingConfig || { rules: [] };
 
       // Vérifier si une règle avec ce nom existe déjà
-      if (finalConfigurationData.rules.some((rule) => rule.name === ruleName)) {
+      if (
+        finalConfigurationData.rules.some(
+          (rule) => rule.name === currentRuleState.name,
+        )
+      ) {
         alert(
-          `Une codification nommée "${ruleName}" existe déjà. Veuillez choisir un nom différent.`,
+          `Une codification nommée "${currentRuleState.name}" existe déjà. Veuillez choisir un nom différent.`,
         );
         // On ne réaffiche pas la page pour que l'utilisateur puisse corriger le nom
         renderCreateNamingRulePage(mainContentDiv, {
