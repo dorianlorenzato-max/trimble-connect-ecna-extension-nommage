@@ -21,6 +21,7 @@ import {
   renderNamingConfigSummaryTable,
   renderHomePageWithButtons,
   renderCreateNamingRulePage,
+  renderAddColumnModal,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -177,21 +178,26 @@ import {
     }
   }
 
-  // <== NOUVELLE FONCTION temporaire
+  // FONCTION pour gerer les boutons de création de convention de nommage
   async function handleCreateNamingRuleClick() {
     renderLoading(mainContentDiv);
-    // Simuler un tableau de colonnes vide pour l'instant
     const namingRuleData = {
       name: "",
       columns: [],
     };
     renderCreateNamingRulePage(mainContentDiv, namingRuleData);
+
     document
       .getElementById("cancel-naming-rule-btn")
       .addEventListener("click", handleConfigNamingClick);
     document
       .getElementById("save-naming-rule-btn")
       .addEventListener("click", handleSaveNamingRuleClick);
+
+    document.getElementById("add-column-btn").addEventListener("click", () => {
+      renderAddColumnModal();
+      // Logique pour gérer la modale à venir ici
+    });
   }
 
   // fonction pour enregistrer la convention de nommage
