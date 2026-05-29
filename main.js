@@ -9,7 +9,8 @@ import {
   findOrCreateFolder,
   getProjectRootId,
   fetchUserProjectRole,
-  fetchProjectGroups, // Ajoutée pour un usage potentiel futur
+  fetchProjectGroups,
+  fetchAllProjectFolders, // Ajoutée pour un usage potentiel futur
 } from "./api.js";
 import {
   renderLoading,
