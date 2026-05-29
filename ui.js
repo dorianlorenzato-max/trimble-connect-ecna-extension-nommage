@@ -142,19 +142,31 @@ function renderCreateNamingRulePage(container, ruleData) {
       ? ruleData.columns.map((col) => `<th>${col.name}</th>`).join("")
       : "<th>(Aucune colonne)</th>";
 
-  const tableValues = ruleData.columns.length > 0
-    ? ruleData.columns.map(col => {
-        let content = '';
-        if (col.type === 'list') {
-            // Si c'est une liste, on mappe les valeurs pour n'afficher que la propriété 'value'
-            content = col.values.map(v => v.value).join('<br>');
-        } else {
-            // Sinon, on affiche le nom du type (par exemple "Texte libre")
-            content = `<i>${col.type}</i>`;
-        }
-        return `<td>${content}</td>`;
-    }).join('')
-    : '<td></td>';
+  const typeDisplayMap = {
+    text: "Texte libre",
+    list: "Liste",
+    number1: "1 chiffre",
+    number2: "2 chiffres",
+    number3: "3 chiffres",
+    trigram: "Trigramme",
+  };
+
+  const tableValues =
+    ruleData.columns.length > 0
+      ? ruleData.columns
+          .map((col) => {
+            let content = "";
+            if (col.type === "list") {
+              // Si c'est une liste, on mappe les valeurs pour n'afficher que la propriété 'value'
+              content = col.values.map((v) => v.value).join("<br>");
+            } else {
+              // Sinon, on affiche le nom du type (par exemple "Texte libre")
+              content = `<i>${typeDisplayMap[col.type] || col.type}</i>`;
+            }
+            return `<td>${content}</td>`;
+          })
+          .join("")
+      : "<td></td>";
 
   container.innerHTML = `
     <div class="naming-rule-creation-container">
