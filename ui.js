@@ -67,6 +67,69 @@ function renderHomePageWithButtons(container, isAdmin) {
   `;
 }
 
+// Affiche la page principale de configuration des nommages
+function renderConfigPage(container, isAdmin) {
+  const adminButtonsHtml = isAdmin
+    ? `
+    <button id="create-naming-btn" class="config-button">Créer une codification</button>
+    <button id="manage-naming-btn" class="config-button">Gérer les codifications</button>
+    <button id="assign-naming-btn" class="config-button">Affectation des codifications</button>
+  `
+    : "";
+
+  container.innerHTML = `
+        <div class="config-page-container">
+            <h1>Configuration des Codifications de Nommage</h1>
+            <div class="config-actions">
+                ${adminButtonsHtml}
+            </div>
+            <div id="naming-config-summary-container">
+                {/* Le tableau sera injecté ici plus tard */}
+            </div>
+        </div>
+    `;
+}
+
+// Fonction pour rendre le tableau récapitulatif des codifications
+function renderNamingConfigSummaryTable(container, summaryData) {
+  if (!summaryData || summaryData.length === 0) {
+    container.innerHTML =
+      '<p style="text-align:center; margin-top:20px;">Aucune codification de nommage n\'est actuellement configurée ou affectée.</p>';
+    return;
+  }
+
+  const tableRows = summaryData
+    .map(
+      (item) => `
+    <tr>
+      <td>${item.ruleName}</td>
+      <td>${item.affectedFolders.length > 0 ? item.affectedFolders.join(", ") : "Aucun"}</td>
+      <td>${item.date === "N/A" ? "N/A" : new Date(item.date).toLocaleDateString()}</td>
+      <td>${item.creator}</td>
+    </tr>
+  `,
+    )
+    .join("");
+
+  container.innerHTML = `
+    <div class="summary-table-wrapper">
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Nom de la codification en place</th>
+                    <th>Dossiers affectés</th>
+                    <th>Date de mise en place</th>
+                    <th>Nom du créateur</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRows}
+            </tbody>
+        </table>
+    </div>
+  `;
+}
+
 // Exporter toutes les fonctions désormais
 export {
   renderLoading,
@@ -75,4 +138,6 @@ export {
   renderSaving,
   renderSuccess,
   renderHomePageWithButtons, // Nouvelle fonction d'accueil
+  renderConfigPage,
+  renderNamingConfigSummaryTable,
 };
