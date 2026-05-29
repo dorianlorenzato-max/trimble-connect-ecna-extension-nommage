@@ -189,6 +189,85 @@ import {
     document
       .getElementById("cancel-naming-rule-btn")
       .addEventListener("click", handleConfigNamingClick);
+    document
+      .getElementById("save-naming-rule-btn")
+      .addEventListener("click", handleSaveNamingRuleClick);
+  }
+
+  // fonction pour enregistrer la convention de nommage
+  async function handleSaveNamingRuleClick() {
+    // 1. Lire les données de l'interface
+    const ruleNameInput = document.getElementById("naming-rule-name");
+    const ruleName = ruleNameInput.value.trim();
+
+    if (!ruleName) {
+      alert("Veuillez donner un nom à la codification.");
+      return;
+    }
+
+    renderSaving(mainContentDiv);
+
+    try {
+      // 2. Préparer les données
+      const loggedInUser = await fetchLoggedInUserDetails(globalAccessToken);
+      const userName =
+        `${loggedInUser.firstName} ${loggedInUser.lastName}`.trim();
+      const today = new Date().toISOString().split("T")[0]; // Format YYYY-MM-DD
+
+      // 3. Lire-Modifier-Écrire
+      const existingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+
+      const finalConfigurationData = existingConfig || { rules: [] };
+
+      // Vérifier si une règle avec ce nom existe déjà
+      if (finalConfigurationData.rules.some((rule) => rule.name === ruleName)) {
+        alert(
+          `Une codification nommée "${ruleName}" existe déjà. Veuillez choisir un nom différent.`,
+        );
+        // On ne réaffiche pas la page pour que l'utilisateur puisse corriger le nom
+        renderCreateNamingRulePage(mainContentDiv, {
+          name: ruleName,
+          columns: [],
+        }); // Réaffiche la page avec les données actuelles
+        return;
+      }
+
+      const newRule = {
+        name: ruleName,
+        columns: [], // Le tableau de colonnes est vide pour l'instant
+        createdBy: userName,
+        createdAt: today,
+        modifiedBy: userName,
+        modifiedAt: today,
+      };
+
+      finalConfigurationData.rules.push(newRule);
+
+      // 4. Sauvegarder le fichier
+      await saveConfigurationFile(
+        triconnectAPI,
+        globalAccessToken,
+        finalConfigurationData,
+        NAMING_CONFIG_FILENAME,
+        configFolderId,
+      );
+
+      // 5. Fournir un retour à l'utilisateur
+      renderSuccess(
+        mainContentDiv,
+        `La codification "${ruleName}" a été enregistrée avec succès.`,
+      );
+
+      // Revenir à la page de configuration après un court délai
+      setTimeout(handleConfigNamingClick, 2000);
+    } catch (error) {
+      console.error("Échec de la sauvegarde de la codification :", error);
+      renderError(mainContentDiv, error);
+    }
   }
 
   // Fonction pour charger et rendre le tableau récapitulatif des codifications
