@@ -186,6 +186,95 @@ function renderCreateNamingRulePage(container, ruleData) {
   `;
 }
 
+// fonction pour créer une colonne de nommage
+
+function renderAddColumnModal() {
+  // Crée l'overlay et le contenu de la modale
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "modal-overlay";
+  modalOverlay.id = "add-column-modal-overlay";
+
+  modalOverlay.innerHTML = `
+    <div class="modal-content">
+        <h2>Ajouter une nouvelle colonne</h2>
+
+        <div class="modal-form-grid">
+            <div class="form-group">
+                <label for="column-name">Nom de la colonne</label>
+                <input type="text" id="column-name" placeholder="Ex: Phase">
+            </div>
+
+            <div class="form-group">
+                <label>Type de données</label>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="column-type" value="text"> Texte libre</label>
+                    <label><input type="radio" name="column-type" value="list"> Liste</label>
+                    <label><input type="radio" name="column-type" value="number1"> 1 chiffre</label>
+                    <label><input type="radio" name="column-type" value="number2"> 2 chiffres</label>
+                    <label><input type="radio" name="column-type" value="number3"> 3 chiffres</label>
+                    <label><input type="radio" name="column-type" value="trigram"> Trigramme</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Obligatoire</label>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="column-required" value="yes" checked> Oui</label>
+                    <label><input type="radio" name="column-required" value="no"> Non</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section pour la liste, initialement cachée -->
+        <div id="list-values-section" class="form-section" style="display: none;">
+            <h4>Valeurs de la liste</h4>
+            <div class="list-values-table-wrapper">
+                <table id="list-values-table">
+                    <thead>
+                        <tr>
+                            <th>Valeur</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" placeholder="Ex: APD"></td>
+                            <td><input type="text" placeholder="Ex: Avant-Projet Détaillé"></td>
+                        </tr>
+                        <!-- D'autres lignes peuvent être ajoutées dynamiquement ici -->
+                    </tbody>
+                </table>
+            </div>
+             <button id="add-list-row-btn" class="button-small">Ajouter une ligne</button>
+        </div>
+
+
+        <div class="modal-actions">
+            <button id="cancel-add-column-btn" class="button-secondary">Annuler</button>
+            <button id="confirm-add-column-btn" class="button-primary">Ajouter la colonne</button>
+        </div>
+    </div>
+  `;
+
+  document.body.appendChild(modalOverlay);
+
+  // Logique pour fermer la modale
+  const closeModal = () => modalOverlay.remove();
+  modalOverlay
+    .querySelector("#cancel-add-column-btn")
+    .addEventListener("click", closeModal);
+
+  // Logique pour afficher/cacher la table de liste
+  modalOverlay
+    .querySelectorAll('input[name="column-type"]')
+    .forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        const listSection = modalOverlay.querySelector("#list-values-section");
+        listSection.style.display =
+          event.target.value === "list" ? "block" : "none";
+      });
+    });
+}
 // Exporter toutes les fonctions désormais
 export {
   renderLoading,
@@ -197,4 +286,5 @@ export {
   renderConfigPage,
   renderNamingConfigSummaryTable,
   renderCreateNamingRulePage,
+  renderAddColumnModal,
 };
