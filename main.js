@@ -10,7 +10,7 @@ import {
   getProjectRootId,
   fetchUserProjectRole,
   fetchProjectGroups,
-  fetchAllProjectFolders, // Ajoutée pour un usage potentiel futur
+  fetchAllProjectFolders,
 } from "./api.js";
 import {
   renderLoading,
@@ -19,7 +19,8 @@ import {
   renderSuccess,
   renderConfigPage,
   renderNamingConfigSummaryTable,
-  renderHomePageWithButtons, // Nouvelle fonction
+  renderHomePageWithButtons,
+  renderCreateNamingRulePage,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -153,9 +154,7 @@ import {
       // Attacher les gestionnaires d'événements aux boutons de la page de configuration
       document
         .getElementById("create-naming-btn")
-        .addEventListener("click", () =>
-          console.log("Clic sur Créer une codification"),
-        ); // Temporaire
+        .addEventListener("click", handleCreateNamingRuleClick);
       document
         .getElementById("manage-naming-btn")
         .addEventListener("click", () =>
@@ -176,6 +175,17 @@ import {
       );
       renderError(mainContentDiv, error);
     }
+  }
+
+  // <== NOUVELLE FONCTION temporaire
+  async function handleCreateNamingRuleClick() {
+    renderLoading(mainContentDiv);
+    // Simuler un tableau de colonnes vide pour l'instant
+    const namingRuleData = {
+      name: "",
+      columns: [],
+    };
+    renderCreateNamingRulePage(mainContentDiv, namingRuleData);
   }
 
   // Fonction pour charger et rendre le tableau récapitulatif des codifications
