@@ -188,7 +188,7 @@ function renderCreateNamingRulePage(container, ruleData) {
 
 // fonction pour créer une colonne de nommage
 
-function renderAddColumnModal() {
+function renderAddColumnModal(onConfirmCallback) {
   // Crée l'overlay et le contenu de la modale
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
@@ -263,6 +263,66 @@ function renderAddColumnModal() {
   modalOverlay
     .querySelector("#cancel-add-column-btn")
     .addEventListener("click", closeModal);
+  modalOverlay
+    .querySelector("#confirm-add-column-btn")
+    .addEventListener("click", () => {
+      // 1. Lire toutes les données du formulaire de la modale
+      const name = modalOverlay.querySelector("#column-name").value.trim();
+      if (!name) {
+        alert("Veuillez donner un nom à la colonne.");
+        return;
+      }
+
+      const type = modalOverlay.querySelector(
+        'input[name="column-type"]:checked',
+      ).value;
+      const isRequired =
+        modalOverlay.querySelector('input[name="column-required"]:checked')
+          .value === "yes";
+
+      let values = [];
+      if (type === "list") {
+        const listRows = modalOverlay.querySelectorAll(
+          "#list-values-table tbody tr",
+        );
+        listRows.forEach((row) => {
+          const valueInput = row.cells[0].querySelector("input");
+          const descInput = row.cells[1].querySelector("input");
+          if (valueInput.value.trim()) {
+            values.push({
+              value: valueInput.value.trim(),
+              description: descInput.value.trim(),
+            });
+          }
+        });
+      }
+
+      // 2. Construire l'objet de la nouvelle colonne
+      const newColumn = {
+        name: name,
+        type: type,
+        required: isRequired,
+        values: values, // sera un tableau vide si le type n'est pas 'list'
+      };
+
+      // 3. Appeler la fonction de callback avec les nouvelles données
+      onConfirmCallback(newColumn);
+
+      // 4. Fermer la modale
+      closeModal();
+    });
+
+  // Logique pour ajouter une ligne à la table des valeurs
+  const addListRowBtn = modalOverlay.querySelector("#add-list-row-btn");
+  const listTableBody = modalOverlay.querySelector("#list-values-table tbody");
+
+  addListRowBtn.addEventListener("click", () => {
+    const newRow = listTableBody.insertRow(); // Crée un <tr> à la fin du <tbody>
+    newRow.innerHTML = `
+        <td><input type="text" placeholder="Nouvelle valeur"></td>
+        <td><input type="text" placeholder="Description (optionnel)"></td>
+    `;
+  });
 
   // Logique pour afficher/cacher la table de liste
   modalOverlay
