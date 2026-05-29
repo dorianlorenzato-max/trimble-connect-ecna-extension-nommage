@@ -36,6 +36,7 @@ import {
   let configFolderId = null;
   let currentProjectId = null;
   let isAdmin = false; // Variable pour stocker le statut administrateur
+  let currentRuleState = null; //  notre variable d'état pour la gestions de colonnes de convention de nommage
 
   // --- INITIALISATION DE L'EXTENSION ---
   try {
@@ -92,7 +93,7 @@ import {
       .addEventListener("click", handleControlNamingClick);
     document
       .getElementById("configNamingBtn")
-      .addEventListener("click", handleConfigNamingClick);
+      .addEventListener("click", handleConfigNamingRuleClick);
 
     // Afficher la page d'accueil avec les boutons
     renderHomePageWithButtons(mainContentDiv, isAdmin);
@@ -116,7 +117,7 @@ import {
       .addEventListener("click", handleControlNamingClick);
     document
       .getElementById("homeConfigNamingBtn")
-      .addEventListener("click", handleConfigNamingClick);
+      .addEventListener("click", handleConfigNamingRuleClick);
   }
 
   async function handleHelpNamingClick() {
@@ -137,7 +138,7 @@ import {
       "<h2>Contrôle des Nommages (à développer)</h2><p>Interface de contrôle...</p>";
   }
 
-  async function handleConfigNamingClick() {
+  async function handleConfigNamingRuleClick() {
     console.log("Clic sur Configuration Nommage");
     if (!isAdmin) {
       alert(
@@ -180,33 +181,49 @@ import {
 
   // FONCTION pour gerer les boutons de création de convention de nommage
   async function handleCreateNamingRuleClick() {
-    renderLoading(mainContentDiv);
-    const namingRuleData = {
+    // Initialise l'état pour une nouvelle règle
+    currentRuleState = {
       name: "",
       columns: [],
     };
-    renderCreateNamingRulePage(mainContentDiv, namingRuleData);
 
-    document
-      .getElementById("cancel-naming-rule-btn")
-      .addEventListener("click", handleConfigNamingClick);
-    document
-      .getElementById("save-naming-rule-btn")
-      .addEventListener("click", handleSaveNamingRuleClick);
+    // Fonction interne pour attacher tous les écouteurs d'événements de cette page
+    function attachCreatePageListeners() {
+      document
+        .getElementById("cancel-naming-rule-btn")
+        .addEventListener("click", handleConfigNamingRuleClick); // Renommé pour plus de clarté
+      document
+        .getElementById("save-naming-rule-btn")
+        .addEventListener("click", handleSaveNamingRuleClick);
+      document
+        .getElementById("add-column-btn")
+        .addEventListener("click", () => {
+          // Affiche la modale et lui passe la fonction de callback
+          renderAddColumnModal(onColumnAdd);
+        });
+    }
 
-    document.getElementById("add-column-btn").addEventListener("click", () => {
-      renderAddColumnModal();
-      // Logique pour gérer la modale à venir ici
-    });
+    // Callback: fonction qui sera appelée par la modale lors de la confirmation
+    const onColumnAdd = (newColumn) => {
+      currentRuleState.columns.push(newColumn);
+      // Re-dessine la page de création avec les données mises à jour
+      renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+      // Ré-attache les écouteurs car le DOM a été remplacé
+      attachCreatePageListeners();
+    };
+
+    // Premier affichage de la page
+    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    attachCreatePageListeners();
   }
 
   // fonction pour enregistrer la convention de nommage
   async function handleSaveNamingRuleClick() {
     // 1. Lire les données de l'interface
     const ruleNameInput = document.getElementById("naming-rule-name");
-    const ruleName = ruleNameInput.value.trim();
+    currentRuleState.name = ruleNameInput.value.trim(); // Met à jour le nom dans l'état
 
-    if (!ruleName) {
+    if (!currentRuleState.name) {
       alert("Veuillez donner un nom à la codification.");
       return;
     }
@@ -243,8 +260,7 @@ import {
       }
 
       const newRule = {
-        name: ruleName,
-        columns: [], // Le tableau de colonnes est vide pour l'instant
+        ...currentRuleState, // Contient déjà le nom et les colonnes
         createdBy: userName,
         createdAt: today,
         modifiedBy: userName,
@@ -269,7 +285,7 @@ import {
       );
 
       // Revenir à la page de configuration après un court délai
-      setTimeout(handleConfigNamingClick, 2000);
+      setTimeout(handleConfigNamingRuleClick, 2000);
     } catch (error) {
       console.error("Échec de la sauvegarde de la codification :", error);
       renderError(mainContentDiv, error);
