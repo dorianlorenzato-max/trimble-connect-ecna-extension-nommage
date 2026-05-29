@@ -186,6 +186,9 @@ import {
       columns: [],
     };
     renderCreateNamingRulePage(mainContentDiv, namingRuleData);
+    document
+      .getElementById("cancel-naming-rule-btn")
+      .addEventListener("click", handleConfigNamingClick);
   }
 
   // Fonction pour charger et rendre le tableau récapitulatif des codifications
