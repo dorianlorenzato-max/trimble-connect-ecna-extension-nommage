@@ -130,6 +130,62 @@ function renderNamingConfigSummaryTable(container, summaryData) {
   `;
 }
 
+// interface de création de convention de nommage
+function renderCreateNamingRulePage(container, ruleData) {
+  const pageTitle = ruleData.name
+    ? `Édition de la codification : ${ruleData.name}`
+    : "Création d'une nouvelle codification de nommage";
+
+  // Pour l'instant, le tableau est statique. Il sera rendu dynamiquement plus tard.
+  const tableHeaders =
+    ruleData.columns.length > 0
+      ? ruleData.columns.map((col) => `<th>${col.name}</th>`).join("")
+      : "<th>(Aucune colonne)</th>";
+
+  const tableValues =
+    ruleData.columns.length > 0
+      ? ruleData.columns
+          .map((col) => `<td>${col.values.join("<br>")}</td>`)
+          .join("")
+      : "<td></td>";
+
+  container.innerHTML = `
+    <div class="naming-rule-creation-container">
+        <h1>${pageTitle}</h1>
+
+        <div class="form-section">
+            <label for="naming-rule-name">Affecter un nom à la convention de nommage :</label>
+            <input type="text" id="naming-rule-name" value="${ruleData.name || ""}" placeholder="Ex: Convention principale">
+        </div>
+
+        <div class="naming-rule-actions">
+            <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
+            <button id="reorder-columns-btn" class="button-secondary">Réorganiser colonnes</button>
+            <button id="delete-column-mode-btn" class="button-secondary">Supprimer colonne</button>
+        </div>
+
+        <div class="naming-rule-preview-container">
+            <h3>Aperçu de la codification</h3>
+            <div class="naming-rule-preview-table-wrapper">
+                <table class="naming-rule-preview-table">
+                    <thead>
+                        <tr>${tableHeaders}</tr>
+                    </thead>
+                    <tbody>
+                        <tr>${tableValues}</tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button id="cancel-naming-rule-btn" class="button-secondary">Annuler</button>
+            <button id="save-naming-rule-btn" class="button-primary">Enregistrer</button>
+        </div>
+    </div>
+  `;
+}
+
 // Exporter toutes les fonctions désormais
 export {
   renderLoading,
@@ -140,4 +196,5 @@ export {
   renderHomePageWithButtons, // Nouvelle fonction d'accueil
   renderConfigPage,
   renderNamingConfigSummaryTable,
+  renderCreateNamingRulePage,
 };
