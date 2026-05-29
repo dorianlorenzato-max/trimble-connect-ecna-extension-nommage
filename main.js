@@ -26,6 +26,7 @@ import {
   const mainContentDiv = document.getElementById("mainContent");
   const CONFIG_FOLDER_NAME = "Configuration_Nommage"; // Nouveau nom de dossier de configuration
   const NAMING_CONFIG_FILENAME = "naming-rules-config.json"; // Nom du fichier de configuration des règles de nommage
+  const NAMING_ASSIGNMENTS_FILENAME = "naming-assignments.json"; // Nom du fichier d'affectation des nommages
 
   let triconnectAPI;
   let globalAccessToken = null;
