@@ -16,6 +16,8 @@ import {
   renderError,
   renderSaving,
   renderSuccess,
+  renderConfigPage,
+  renderNamingConfigSummaryTable,
   renderHomePageWithButtons, // Nouvelle fonction
 } from "./ui.js";
 
@@ -132,7 +134,6 @@ import {
   }
 
   async function handleConfigNamingClick() {
-    // Logique pour le bouton "Configuration Nommage"
     console.log("Clic sur Configuration Nommage");
     if (!isAdmin) {
       alert(
@@ -141,9 +142,102 @@ import {
       renderHomePageWithButtons(mainContentDiv, isAdmin); // Revenir à la page d'accueil
       return;
     }
-    renderLoading(mainContentDiv); // Affiche un message de chargement
-    // Ici, vous appelerez la fonction de rendu spécifique pour la configuration
-    mainContentDiv.innerHTML =
-      "<h2>Configuration du Nommage (à développer)</h2><p>Interface de configuration...</p>";
+    renderLoading(mainContentDiv);
+
+    try {
+      // Rendre la page de configuration générale
+      renderConfigPage(mainContentDiv, isAdmin);
+
+      // Attacher les gestionnaires d'événements aux boutons de la page de configuration
+      document
+        .getElementById("create-naming-btn")
+        .addEventListener("click", () =>
+          console.log("Clic sur Créer une codification"),
+        ); // Temporaire
+      document
+        .getElementById("manage-naming-btn")
+        .addEventListener("click", () =>
+          console.log("Clic sur Gérer les codifications"),
+        ); // Temporaire
+      document
+        .getElementById("assign-naming-btn")
+        .addEventListener("click", () =>
+          console.log("Clic sur Affecter les codifications"),
+        ); // Temporaire
+
+      // Charger et rendre le tableau récapitulatif
+      await loadAndRenderNamingSummary();
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'affichage de la page de configuration:",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  // Fonction pour charger et rendre le tableau récapitulatif des codifications
+  async function loadAndRenderNamingSummary() {
+    const summaryContainer = document.getElementById(
+      "naming-config-summary-container",
+    );
+    if (!summaryContainer) return; // S'assurer que le conteneur existe
+
+    summaryContainer.innerHTML = `<p style="text-align:center; margin-top:20px;">Chargement du récapitulatif des codifications...</p>`;
+
+    try {
+      // Pour l'instant, on va simuler des données car la logique de sauvegarde n'est pas encore implémentée
+      const namingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const assignmentsConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_ASSIGNMENTS_FILENAME,
+      );
+      const allProjectFolders = await fetchAllProjectFolders(
+        triconnectAPI,
+        globalAccessToken,
+      );
+
+      const folderIdToNameMap = new Map(
+        allProjectFolders.map((f) => [f.id, f.name]),
+      );
+
+      const allNamingRules = namingConfig?.rules || [];
+      const allAssignments = assignmentsConfig || {};
+      const assignmentsByRule = {};
+
+      for (const folderId in allAssignments) {
+        const ruleName = allAssignments[folderId];
+        if (ruleName) {
+          if (!assignmentsByRule[ruleName]) {
+            assignmentsByRule[ruleName] = [];
+          }
+          const folderName = folderIdToNameMap.get(folderId);
+          if (folderName) {
+            assignmentsByRule[ruleName].push(folderName);
+          }
+        }
+      }
+
+      const summaryData = allNamingRules.map((rule) => ({
+        ruleName: rule.name,
+        affectedFolders: assignmentsByRule[rule.name] || [],
+        date: rule.modifiedAt || rule.createdAt || "N/A",
+        creator: rule.modifiedBy || rule.createdBy || "N/A",
+      }));
+
+      renderNamingConfigSummaryTable(summaryContainer, summaryData);
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement du résumé des codifications :",
+        error,
+      );
+      summaryContainer.innerHTML = `<p style="color: red; text-align:center; margin-top:20px;">Erreur lors du chargement des données : ${error.message}</p>`;
+      renderError(mainContentDiv, error); // Affiche aussi l'erreur principale
+    }
   }
 })();
