@@ -22,6 +22,7 @@ import {
   renderHomePageWithButtons,
   renderCreateNamingRulePage,
   renderAddColumnModal,
+  renderManageNamingRulesPage,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -159,9 +160,7 @@ import {
         .addEventListener("click", handleCreateNamingRuleClick);
       document
         .getElementById("manage-naming-btn")
-        .addEventListener("click", () =>
-          console.log("Clic sur Gérer les codifications"),
-        ); // Temporaire
+        .addEventListener("click", handleManageNamingRulesClick);
       document
         .getElementById("assign-naming-btn")
         .addEventListener("click", () =>
@@ -173,6 +172,95 @@ import {
     } catch (error) {
       console.error(
         "Erreur lors de l'affichage de la page de configuration:",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  async function handleManageNamingRulesClick() {
+    renderLoading(mainContentDiv);
+    try {
+      const config = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const rules = config ? config.rules : [];
+      renderManageNamingRulesPage(mainContentDiv, rules);
+      attachManageRulesEvents(rules); // On attache les événements pour les boutons
+    } catch (error) {
+      console.error("Erreur lors du chargement des règles de nommage :", error);
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  // FONCTION pour attacher les événements de la page de gestion
+  function attachManageRulesEvents(rules) {
+    document.querySelectorAll(".delete-rule-btn").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        const ruleNameToDelete = event.target.dataset.ruleName;
+        // La logique de suppression sera ajoutée ici
+        if (
+          confirm(
+            `Êtes-vous sûr de vouloir supprimer la codification "${ruleNameToDelete}" ? Cette action est irréversible.`,
+          )
+        ) {
+          handleDeleteNamingRule(ruleNameToDelete);
+        }
+      });
+    });
+
+    document.querySelectorAll(".edit-rule-btn").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        const ruleNameToEdit = event.target.dataset.ruleName;
+        // La logique de modification sera ajoutée ici
+        console.log(`Clic sur modifier pour : ${ruleNameToEdit}`);
+      });
+    });
+
+    document
+      .getElementById("back-to-config-btn")
+      .addEventListener("click", handleConfigNamingRuleClick);
+  }
+
+  async function handleDeleteNamingRule(ruleNameToDelete) {
+    renderSaving(mainContentDiv);
+    try {
+      const existingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+
+      if (!existingConfig || !existingConfig.rules) {
+        throw new Error(
+          "Impossible de récupérer la configuration pour la suppression.",
+        );
+      }
+
+      // Appliquer le modèle Lire-Modifier-Écrire
+      const updatedRules = existingConfig.rules.filter(
+        (rule) => rule.name !== ruleNameToDelete,
+      );
+      const finalConfigurationData = { ...existingConfig, rules: updatedRules };
+
+      await saveConfigurationFile(
+        triconnectAPI,
+        globalAccessToken,
+        finalConfigurationData,
+        NAMING_CONFIG_FILENAME,
+        configFolderId,
+      );
+
+      renderSuccess(
+        mainContentDiv,
+        `La codification "${ruleNameToDelete}" a été supprimée.`,
+      );
+      setTimeout(handleManageNamingRulesClick, 1500); // Revenir à la page de gestion
+    } catch (error) {
+      console.error(
+        `Échec de la suppression de la règle "${ruleNameToDelete}":`,
         error,
       );
       renderError(mainContentDiv, error);
