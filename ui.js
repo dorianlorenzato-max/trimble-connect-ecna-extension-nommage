@@ -136,6 +136,16 @@ function renderCreateNamingRulePage(container, ruleData) {
     ? `Édition de la codification : ${ruleData.name}`
     : "Création d'une nouvelle codification de nommage";
 
+  // Définition du texte d'aide
+  let editModeDescription = "";
+  if (ruleData.editMode === "reorder") {
+    editModeDescription =
+      "Cliquez et glissez les en-têtes de colonnes pour les réorganiser.";
+  } else if (ruleData.editMode === "delete") {
+    editModeDescription =
+      'Cliquez sur l\'icône de poubelle pour marquer une colonne à supprimer. Cliquez à nouveau sur le bouton "Supprimer" pour valider la suppresion.';
+  }
+
   // Ajoute une classe CSS lorsque le mode réorganisation est actif
   const tableWrapperClass =
     ruleData.editMode === "reorder" ? "reorder-mode" : "";
@@ -171,6 +181,7 @@ function renderCreateNamingRulePage(container, ruleData) {
     ruleData.columns.length > 0
       ? ruleData.columns
           .map((col) => {
+            const tdClass = col.markedForDeletion ? "marked-for-deletion" : "";
             let content = "";
             if (col.type === "list") {
               // Si c'est une liste, on mappe les valeurs pour n'afficher que la propriété 'value'
@@ -179,7 +190,7 @@ function renderCreateNamingRulePage(container, ruleData) {
               // Sinon, on affiche le nom du type (par exemple "Texte libre")
               content = `<i>${typeDisplayMap[col.type] || col.type}</i>`;
             }
-            return `<td>${content}</td>`;
+            return `<td class="${tdClass}">${content}</td>`;
           })
           .join("")
       : "<td></td>";
@@ -197,6 +208,7 @@ function renderCreateNamingRulePage(container, ruleData) {
             <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
             <button id="reorder-columns-btn" class="button-secondary ${ruleData.editMode === "reorder" ? "active-mode" : ""}">Réorganiser colonnes</button>
             <button id="delete-column-mode-btn" class="button-secondary ${ruleData.editMode === "delete" ? "active-mode" : ""}">Supprimer colonne</button>
+            <span class="edit-mode-description">${editModeDescription}</span>
         </div>
 
         <div class="naming-rule-preview-container">
