@@ -12,6 +12,7 @@ import {
   fetchProjectGroups,
   fetchAllProjectFolders,
   recursivelyFetchAllSubfolders,
+  fetchAllControlledDocuments,
 } from "./api.js";
 import {
   renderLoading,
@@ -26,6 +27,7 @@ import {
   renderManageNamingRulesPage,
   renderAssignNamingPage,
   updateAssignmentPanel,
+  renderControlPage,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -135,12 +137,48 @@ import {
   }
 
   async function handleControlNamingClick() {
-    // Logique pour le bouton "Contrôle Nommage"
-    console.log("Clic sur Contrôle Nommage");
-    renderLoading(mainContentDiv); // Affiche un message de chargement
-    // Ici, vous appelerez la fonction de rendu spécifique pour le contrôle
-    mainContentDiv.innerHTML =
-      "<h2>Contrôle des Nommages (à développer)</h2><p>Interface de contrôle...</p>";
+    renderLoading(mainContentDiv);
+    try {
+      const [namingConfig, assignmentsConfig] = await Promise.all([
+        fetchConfigurationFile(
+          globalAccessToken,
+          configFolderId,
+          NAMING_CONFIG_FILENAME,
+        ),
+        fetchConfigurationFile(
+          globalAccessToken,
+          configFolderId,
+          NAMING_ASSIGNMENTS_FILENAME,
+        ),
+      ]);
+
+      const allRules = namingConfig ? namingConfig.rules : [];
+      const allAssignments = assignmentsConfig || {};
+
+      const documents = await fetchAllControlledDocuments(
+        triconnectAPI,
+        globalAccessToken,
+        allAssignments,
+        isAdmin,
+      );
+
+      // Traitement des données : regrouper les documents par convention
+      const documentsByConvention = {};
+      documents.forEach((doc) => {
+        if (!documentsByConvention[doc.conventionName]) {
+          documentsByConvention[doc.conventionName] = [];
+        }
+        documentsByConvention[doc.conventionName].push(doc);
+      });
+
+      renderControlPage(mainContentDiv, documentsByConvention, allRules);
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement de la page de contrôle :",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
   }
 
   async function handleConfigNamingRuleClick() {
