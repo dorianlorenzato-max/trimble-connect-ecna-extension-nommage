@@ -316,96 +316,6 @@ import {
       editMode: "normal",
     };
 
-    // Fonction interne pour attacher tous les écouteurs d'événements de cette page
-    function attachCreatePageListeners() {
-      document
-        .getElementById("cancel-naming-rule-btn")
-        .addEventListener("click", handleConfigNamingRuleClick);
-      document
-        .getElementById("save-naming-rule-btn")
-        .addEventListener("click", handleSaveNamingRuleClick);
-      document
-        .getElementById("add-column-btn")
-        .addEventListener("click", () => {
-          // Sauvegarde le nom actuel avant d'ouvrir la modale pour ne pas le perdre
-          currentRuleState.name =
-            document.getElementById("naming-rule-name").value;
-          renderAddColumnModal(onColumnAdd);
-        });
-      // --- Logique pour les boutons de mode ---
-      const reorderBtn = document.getElementById("reorder-columns-btn");
-      const deleteBtn = document.getElementById("delete-column-mode-btn");
-
-      reorderBtn.addEventListener("click", () => {
-        if (currentRuleState.columns.length === 0) {
-          alert("Veuillez d'abord ajouter une colonne avant de réorganiser.");
-          return;
-        }
-        currentRuleState.editMode =
-          currentRuleState.editMode === "reorder" ? "normal" : "reorder";
-        rerenderPage();
-      });
-
-      deleteBtn.addEventListener("click", () => {
-        if (currentRuleState.columns.length === 0) {
-          alert("Veuillez d'abord ajouter une colonne avant de supprimer.");
-          return;
-        }
-
-        // Si on quitte le mode suppression, on applique les suppressions
-        if (currentRuleState.editMode === "delete") {
-          currentRuleState.columns = currentRuleState.columns.filter(
-            (col) => !col.markedForDeletion,
-          );
-        }
-
-        currentRuleState.editMode =
-          currentRuleState.editMode === "delete" ? "normal" : "delete";
-        rerenderPage();
-      });
-
-      // --- Logique pour marquer une colonne pour suppression ---
-      if (currentRuleState.editMode === "delete") {
-        document.querySelectorAll(".delete-column-icon").forEach((icon) => {
-          icon.addEventListener("click", (event) => {
-            const indexToMark = parseInt(event.target.dataset.columnIndex, 10);
-            const column = currentRuleState.columns[indexToMark];
-            // On bascule l'état 'marqué pour suppression'
-            column.markedForDeletion = !column.markedForDeletion;
-            rerenderPage();
-          });
-        });
-      }
-
-      // --- Logique pour le glisser-déposer (Drag-and-Drop) ---
-      if (currentRuleState.editMode === "reorder") {
-        const tableHeaderRow = document.querySelector(
-          ".naming-rule-preview-table thead tr",
-        );
-        if (tableHeaderRow) {
-          Sortable.create(tableHeaderRow, {
-            animation: 150,
-            onEnd: function (evt) {
-              // Réorganise le tableau des colonnes dans notre état
-              const [movedItem] = currentRuleState.columns.splice(
-                evt.oldIndex,
-                1,
-              );
-              currentRuleState.columns.splice(evt.newIndex, 0, movedItem);
-              // On ne quitte plus le mode, on redessine simplement
-              rerenderPage();
-            },
-          });
-        }
-      }
-    }
-
-    const rerenderPage = () => {
-      currentRuleState.name = document.getElementById("naming-rule-name").value;
-      renderCreateNamingRulePage(mainContentDiv, currentRuleState);
-      attachCreatePageListeners();
-    };
-
     // Callback: fonction qui sera appelée par la modale lors de la confirmation
     const onColumnAdd = (newColumn) => {
       currentRuleState.columns.push(newColumn);
@@ -522,6 +432,83 @@ import {
     }
   }
 
+  function attachCreatePageListeners() {
+    document
+      .getElementById("cancel-naming-rule-btn")
+      .addEventListener("click", handleConfigNamingRuleClick);
+    document
+      .getElementById("save-naming-rule-btn")
+      .addEventListener("click", handleSaveNamingRuleClick);
+
+    document.getElementById("add-column-btn").addEventListener("click", () => {
+      currentRuleState.name = document.getElementById("naming-rule-name").value;
+      renderAddColumnModal(onColumnAdd);
+    });
+
+    const reorderBtn = document.getElementById("reorder-columns-btn");
+    const deleteBtn = document.getElementById("delete-column-mode-btn");
+
+    reorderBtn.addEventListener("click", () => {
+      if (currentRuleState.columns.length === 0) {
+        alert("Veuillez d'abord ajouter une colonne avant de réorganiser.");
+        return;
+      }
+      currentRuleState.editMode =
+        currentRuleState.editMode === "reorder" ? "normal" : "reorder";
+      rerenderPage();
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      if (currentRuleState.columns.length === 0) {
+        alert("Veuillez d'abord ajouter une colonne avant de supprimer.");
+        return;
+      }
+      if (currentRuleState.editMode === "delete") {
+        currentRuleState.columns = currentRuleState.columns.filter(
+          (col) => !col.markedForDeletion,
+        );
+      }
+      currentRuleState.editMode =
+        currentRuleState.editMode === "delete" ? "normal" : "delete";
+      rerenderPage();
+    });
+
+    if (currentRuleState.editMode === "delete") {
+      document.querySelectorAll(".delete-column-icon").forEach((icon) => {
+        icon.addEventListener("click", (event) => {
+          const indexToMark = parseInt(event.target.dataset.columnIndex, 10);
+          const column = currentRuleState.columns[indexToMark];
+          column.markedForDeletion = !column.markedForDeletion;
+          rerenderPage();
+        });
+      });
+    }
+
+    if (currentRuleState.editMode === "reorder") {
+      const tableHeaderRow = document.querySelector(
+        ".naming-rule-preview-table thead tr",
+      );
+      if (tableHeaderRow) {
+        Sortable.create(tableHeaderRow, {
+          animation: 150,
+          onEnd: function (evt) {
+            const [movedItem] = currentRuleState.columns.splice(
+              evt.oldIndex,
+              1,
+            );
+            currentRuleState.columns.splice(evt.newIndex, 0, movedItem);
+            rerenderPage();
+          },
+        });
+      }
+    }
+  }
+
+  const rerenderPage = () => {
+    currentRuleState.name = document.getElementById("naming-rule-name").value;
+    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    attachCreatePageListeners();
+  };
   // Fonction pour charger et rendre le tableau récapitulatif des codifications
   async function loadAndRenderNamingSummary() {
     const summaryContainer = document.getElementById(
