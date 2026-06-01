@@ -11,6 +11,7 @@ import {
   fetchUserProjectRole,
   fetchProjectGroups,
   fetchAllProjectFolders,
+  recursivelyFetchAllSubfolders,
 } from "./api.js";
 import {
   renderLoading,
