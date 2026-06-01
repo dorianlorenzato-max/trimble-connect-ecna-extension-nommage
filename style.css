@@ -341,24 +341,52 @@ body {
 .naming-rule-preview-table th {
   position: relative; /* Contexte pour le positionnement de l'icône */
 }
-.delete-column-icon {
-  position: absolute;
-  top: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  cursor: pointer;
-  font-size: 1.2rem;
-  color: #d9534f;
-  background-color: white;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
+
+/* --- Position de l'icône de suppression --- */
+.th-content-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  gap: 8px; /* Espace entre l'icône et le nom */
+}
+.delete-column-icon {
+  cursor: pointer;
+  font-size: 1rem;
+  color: #d9534f;
+  transition: transform 0.2s;
 }
 .delete-column-icon:hover {
-  background-color: #d9534f;
-  color: white;
+  transform: scale(1.3);
+}
+
+/* --- Animation de tremblement --- */
+@keyframes tremble {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-0.5deg);
+  }
+  75% {
+    transform: rotate(0.5deg);
+  }
+}
+
+/* Applique l'animation en mode réorganisation */
+.reorder-mode .draggable-column {
+  animation: tremble 0.3s infinite;
+}
+
+/* --- Style pour les colonnes marquées pour suppression --- */
+.marked-for-deletion {
+  background-color: #fddede !important; /* Rouge pâle, !important pour surcharger les autres styles */
+  opacity: 0.7;
+}
+
+/* --- Style pour le texte d'aide --- */
+.edit-mode-description {
+  font-style: italic;
+  color: #555;
+  align-self: center; /* Pour bien l'aligner verticalement avec les boutons */
 }
