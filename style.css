@@ -457,6 +457,16 @@ body {
   padding-left: 20px;
 }
 
+.folder-tree li {
+  padding: 4px 0; /* Ajoute de l'espacement vertical entre les dossiers */
+}
+
+/* Ajoute l'icône de dossier */
+.folder-item .folder-name::before {
+  content: "📁"; /* Icône de dossier */
+  margin-right: 8px; /* Espace entre l'icône et le texte */
+}
+
 .folder-item .folder-name {
   cursor: pointer;
   font-weight: normal;
