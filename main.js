@@ -316,15 +316,6 @@ import {
       editMode: "normal",
     };
 
-    // Callback: fonction qui sera appelée par la modale lors de la confirmation
-    const onColumnAdd = (newColumn) => {
-      currentRuleState.columns.push(newColumn);
-      // Re-dessine la page de création avec les données mises à jour
-      renderCreateNamingRulePage(mainContentDiv, currentRuleState);
-      // Ré-attache les écouteurs car le DOM a été remplacé
-      attachCreatePageListeners();
-    };
-
     // Premier affichage de la page
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     attachCreatePageListeners();
@@ -332,9 +323,10 @@ import {
 
   // fonction pour enregistrer la convention de nommage
   async function handleSaveNamingRuleClick() {
-    // 1. Lire les données de l'interface
-    const ruleNameInput = document.getElementById("naming-rule-name");
-    currentRuleState.name = ruleNameInput.value.trim(); // Met à jour le nom dans l'état
+    // 1. Mettre à jour l'état avec la dernière valeur de l'input
+    currentRuleState.name = document
+      .getElementById("naming-rule-name")
+      .value.trim();
 
     if (!currentRuleState.name) {
       alert("Veuillez donner un nom à la codification.");
@@ -344,72 +336,54 @@ import {
     renderSaving(mainContentDiv);
 
     try {
-      // 2. Préparer les données
       const loggedInUser = await fetchLoggedInUserDetails(globalAccessToken);
       const userName =
         `${loggedInUser.firstName} ${loggedInUser.lastName}`.trim();
-      const today = new Date().toISOString().split("T")[0]; // Format YYYY-MM-DD
+      const today = new Date().toISOString().split("T")[0];
 
-      // 3. Lire-Modifier-Écrire
       const existingConfig = await fetchConfigurationFile(
         globalAccessToken,
         configFolderId,
         NAMING_CONFIG_FILENAME,
       );
-
       const finalConfigurationData = existingConfig || { rules: [] };
-      // --- LOGIQUE DE MISE À JOUR ---
+
       if (originalRuleNameToEdit) {
         // --- MODE ÉDITION ---
         const ruleIndex = finalConfigurationData.rules.findIndex(
           (rule) => rule.name === originalRuleNameToEdit,
         );
+        if (ruleIndex === -1) throw new Error("Règle originale introuvable.");
 
-        if (ruleIndex === -1) {
-          throw new Error(
-            `Impossible de trouver la règle originale "${originalRuleNameToEdit}" à modifier.`,
-          );
-        }
-
-        const updatedRule = {
-          ...finalConfigurationData.rules[ruleIndex], // Conserve les dates de création
-          ...currentRuleState, // Applique les nouvelles données (nom, colonnes)
+        finalConfigurationData.rules[ruleIndex] = {
+          ...finalConfigurationData.rules[ruleIndex],
+          ...currentRuleState,
           modifiedBy: userName,
           modifiedAt: today,
         };
-
-        finalConfigurationData.rules[ruleIndex] = updatedRule;
-        console.log(`Règle "${originalRuleNameToEdit}" modifiée.`);
       } else {
-        // Vérifier si une règle avec ce nom existe déjà
+        // --- MODE CRÉATION ---
         if (
           finalConfigurationData.rules.some(
             (rule) => rule.name === currentRuleState.name,
           )
         ) {
           alert(
-            `Une codification nommée "${currentRuleState.name}" existe déjà. Veuillez choisir un nom différent.`,
+            `Une codification nommée "${currentRuleState.name}" existe déjà.`,
           );
-          // On ne réaffiche pas la page pour que l'utilisateur puisse corriger le nom
-          renderCreateNamingRulePage(mainContentDiv, {
-            name: ruleName,
-            columns: [],
-          }); // Réaffiche la page avec les données actuelles
+          renderCreateNamingRulePage(mainContentDiv, currentRuleState); // Ré-affiche avec les données actuelles
+          attachCreatePageListeners();
           return;
         }
+        finalConfigurationData.rules.push({
+          ...currentRuleState,
+          createdBy: userName,
+          createdAt: today,
+          modifiedBy: userName,
+          modifiedAt: today,
+        });
       }
 
-      const newRule = {
-        ...currentRuleState, // Contient déjà le nom et les colonnes
-        createdBy: userName,
-        createdAt: today,
-        modifiedBy: userName,
-        modifiedAt: today,
-      };
-
-      finalConfigurationData.rules.push(newRule);
-
-      // 4. Sauvegarder le fichier
       await saveConfigurationFile(
         triconnectAPI,
         globalAccessToken,
@@ -417,20 +391,29 @@ import {
         NAMING_CONFIG_FILENAME,
         configFolderId,
       );
-      originalRuleNameToEdit = null;
-      // 5. Fournir un retour à l'utilisateur
+
+      originalRuleNameToEdit = null; // Nettoyer l'état d'édition
       renderSuccess(
         mainContentDiv,
         `La codification "${currentRuleState.name}" a été enregistrée avec succès.`,
       );
-
-      // Revenir à la page de configuration après un court délai
-      setTimeout(handleConfigNamingRuleClick, 2000);
+      setTimeout(handleManageNamingRulesClick, 2000);
     } catch (error) {
-      console.error("Échec de la sauvegarde de la codification :", error);
+      console.error(
+        "Échec de la sauvegarde/modification de la codification:",
+        error,
+      );
+      originalRuleNameToEdit = null;
       renderError(mainContentDiv, error);
     }
   }
+
+  const onColumnAdd = (newColumn) => {
+    currentRuleState.name = document.getElementById("naming-rule-name").value;
+    currentRuleState.columns.push(newColumn);
+    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    attachCreatePageListeners();
+  };
 
   function attachCreatePageListeners() {
     document
