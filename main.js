@@ -196,7 +196,14 @@ import {
       document
         .getElementById("save-naming-rule-btn")
         .addEventListener("click", handleSaveNamingRuleClick);
-
+      document
+        .getElementById("add-column-btn")
+        .addEventListener("click", () => {
+          // Sauvegarde le nom actuel avant d'ouvrir la modale pour ne pas le perdre
+          currentRuleState.name =
+            document.getElementById("naming-rule-name").value;
+          renderAddColumnModal(onColumnAdd);
+        });
       // --- Logique pour les boutons de mode ---
       const reorderBtn = document.getElementById("reorder-columns-btn");
       const deleteBtn = document.getElementById("delete-column-mode-btn");
