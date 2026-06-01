@@ -390,3 +390,39 @@ body {
   color: #555;
   align-self: center; /* Pour bien l'aligner verticalement avec les boutons */
 }
+
+/* === STYLES POUR LA PAGE DE GESTION === */
+.management-page-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.management-table-wrapper {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+}
+
+.management-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.management-table th,
+.management-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.management-table th {
+  background-color: #f8f8f8;
+  font-weight: bold;
+}
+
+.management-table .actions-cell {
+  display: flex;
+  gap: 10px;
+}
