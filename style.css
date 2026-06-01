@@ -426,3 +426,61 @@ body {
   display: flex;
   gap: 10px;
 }
+
+/* === PAGE D'AFFECTATION (ARBORESCENCE) === */
+.affectation-page-container {
+  width: 100%;
+  max-width: 1200px; /* Un peu plus large pour l'arborescence */
+  margin: 0 auto;
+}
+
+.affectation-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Deux colonnes */
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.folder-browser-container,
+.assignment-panel {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 400px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.folder-tree {
+  list-style-type: none;
+  padding-left: 20px;
+}
+
+.folder-item .folder-name {
+  cursor: pointer;
+  font-weight: normal;
+}
+.folder-item .folder-name:hover {
+  text-decoration: underline;
+}
+.folder-item.selected > .folder-name {
+  font-weight: bold;
+  color: #005a70;
+}
+
+.assignment-panel-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: #888;
+  text-align: center;
+}
+
+.heredity-checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+}
