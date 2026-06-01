@@ -185,6 +185,7 @@ import {
     currentRuleState = {
       name: "",
       columns: [],
+      editMode: "normal",
     };
 
     // Fonction interne pour attacher tous les écouteurs d'événements de cette page
@@ -203,7 +204,65 @@ import {
           // Affiche la modale et lui passe la fonction de callback
           renderAddColumnModal(onColumnAdd);
         });
+      // --- Logique pour les boutons de mode ---
+      const reorderBtn = document.getElementById("reorder-columns-btn");
+      const deleteBtn = document.getElementById("delete-column-mode-btn");
+
+      reorderBtn.addEventListener("click", () => {
+        currentRuleState.editMode =
+          currentRuleState.editMode === "reorder" ? "normal" : "reorder";
+        rerenderPage();
+      });
+
+      deleteBtn.addEventListener("click", () => {
+        currentRuleState.editMode =
+          currentRuleState.editMode === "delete" ? "normal" : "delete";
+        rerenderPage();
+      });
+      // --- Logique pour la suppression d'une colonne ---
+      if (currentRuleState.editMode === "delete") {
+        document.querySelectorAll(".delete-column-icon").forEach((icon) => {
+          icon.addEventListener("click", (event) => {
+            const indexToDelete = parseInt(
+              event.target.dataset.columnIndex,
+              10,
+            );
+            currentRuleState.columns.splice(indexToDelete, 1); // Supprime l'élément du tableau
+            currentRuleState.editMode = "normal"; // Sort du mode suppression
+            rerenderPage();
+          });
+        });
+      }
+      // --- Logique pour le glisser-déposer (Drag-and-Drop) ---
+      if (currentRuleState.editMode === "reorder") {
+        const tableHeaderRow = document.querySelector(
+          ".naming-rule-preview-table thead tr",
+        );
+        if (tableHeaderRow) {
+          Sortable.create(tableHeaderRow, {
+            animation: 150,
+            onEnd: function (evt) {
+              // Réorganise le tableau des colonnes dans notre état
+              const [movedItem] = currentRuleState.columns.splice(
+                evt.oldIndex,
+                1,
+              );
+              currentRuleState.columns.splice(evt.newIndex, 0, movedItem);
+
+              // Sortir du mode réorganisation et re-dessiner
+              currentRuleState.editMode = "normal";
+              rerenderPage();
+            },
+          });
+        }
+      }
     }
+
+    const rerenderPage = () => {
+      currentRuleState.name = document.getElementById("naming-rule-name").value;
+      renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+      attachCreatePageListeners();
+    };
 
     // Callback: fonction qui sera appelée par la modale lors de la confirmation
     const onColumnAdd = (newColumn) => {
