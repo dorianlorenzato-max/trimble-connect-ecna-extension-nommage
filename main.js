@@ -192,47 +192,56 @@ import {
     function attachCreatePageListeners() {
       document
         .getElementById("cancel-naming-rule-btn")
-        .addEventListener("click", handleConfigNamingRuleClick); // Renommé pour plus de clarté
+        .addEventListener("click", handleConfigNamingRuleClick);
       document
         .getElementById("save-naming-rule-btn")
         .addEventListener("click", handleSaveNamingRuleClick);
-      document
-        .getElementById("add-column-btn")
-        .addEventListener("click", () => {
-          currentRuleState.name =
-            document.getElementById("naming-rule-name").value;
-          // Affiche la modale et lui passe la fonction de callback
-          renderAddColumnModal(onColumnAdd);
-        });
+
       // --- Logique pour les boutons de mode ---
       const reorderBtn = document.getElementById("reorder-columns-btn");
       const deleteBtn = document.getElementById("delete-column-mode-btn");
 
       reorderBtn.addEventListener("click", () => {
+        if (currentRuleState.columns.length === 0) {
+          alert("Veuillez d'abord ajouter une colonne avant de réorganiser.");
+          return;
+        }
         currentRuleState.editMode =
           currentRuleState.editMode === "reorder" ? "normal" : "reorder";
         rerenderPage();
       });
 
       deleteBtn.addEventListener("click", () => {
+        if (currentRuleState.columns.length === 0) {
+          alert("Veuillez d'abord ajouter une colonne avant de supprimer.");
+          return;
+        }
+
+        // Si on quitte le mode suppression, on applique les suppressions
+        if (currentRuleState.editMode === "delete") {
+          currentRuleState.columns = currentRuleState.columns.filter(
+            (col) => !col.markedForDeletion,
+          );
+        }
+
         currentRuleState.editMode =
           currentRuleState.editMode === "delete" ? "normal" : "delete";
         rerenderPage();
       });
-      // --- Logique pour la suppression d'une colonne ---
+
+      // --- Logique pour marquer une colonne pour suppression ---
       if (currentRuleState.editMode === "delete") {
         document.querySelectorAll(".delete-column-icon").forEach((icon) => {
           icon.addEventListener("click", (event) => {
-            const indexToDelete = parseInt(
-              event.target.dataset.columnIndex,
-              10,
-            );
-            currentRuleState.columns.splice(indexToDelete, 1); // Supprime l'élément du tableau
-            currentRuleState.editMode = "normal"; // Sort du mode suppression
+            const indexToMark = parseInt(event.target.dataset.columnIndex, 10);
+            const column = currentRuleState.columns[indexToMark];
+            // On bascule l'état 'marqué pour suppression'
+            column.markedForDeletion = !column.markedForDeletion;
             rerenderPage();
           });
         });
       }
+
       // --- Logique pour le glisser-déposer (Drag-and-Drop) ---
       if (currentRuleState.editMode === "reorder") {
         const tableHeaderRow = document.querySelector(
@@ -248,9 +257,7 @@ import {
                 1,
               );
               currentRuleState.columns.splice(evt.newIndex, 0, movedItem);
-
-              // Sortir du mode réorganisation et re-dessiner
-              currentRuleState.editMode = "normal";
+              // On ne quitte plus le mode, on redessine simplement
               rerenderPage();
             },
           });
