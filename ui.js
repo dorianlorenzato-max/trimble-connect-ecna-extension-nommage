@@ -487,6 +487,60 @@ function updateAssignmentPanel(folder, allRuleNames, currentAssignedRule) {
   `;
 }
 
+function validatePart(value, rule) {
+  // 1. Gérer le cas "non obligatoire"
+  if (!rule.required && !value) {
+    return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
+  }
+
+  // 2. Gérer le cas "obligatoire" mais vide
+  if (rule.required && !value) {
+    return { isValid: false, reason: "Valeur obligatoire manquante" };
+  }
+
+  // 3. Validation par type
+  switch (rule.type) {
+    case "text":
+      return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
+    case "list":
+      const isValid = rule.values.some((v) => v.value === value);
+      return {
+        isValid,
+        reason: isValid
+          ? ""
+          : `La valeur "${value}" n'est pas dans la liste autorisée.`,
+      };
+    case "number1":
+      const isNumber1 = /^\d{1}$/.test(value);
+      return {
+        isValid: isNumber1,
+        reason: isNumber1 ? "" : "Doit être un chiffre unique.",
+      };
+    case "number2":
+      const isNumber2 = /^\d{2}$/.test(value);
+      return {
+        isValid: isNumber2,
+        reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
+      };
+    case "number3":
+      const isNumber3 = /^\d{3}$/.test(value);
+      return {
+        isValid: isNumber3,
+        reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
+      };
+    case "trigram":
+      const isTrigram = /^[A-Z]{3}$/.test(value);
+      return {
+        isValid: isTrigram,
+        reason: isTrigram
+          ? ""
+          : "Doit être un trigramme en majuscules (3 lettres).",
+      };
+    default:
+      return { isValid: true }; // Type inconnu, on ne bloque pas
+  }
+}
+
 function renderControlPage(container, documentsByConvention, allRules) {
   if (Object.keys(documentsByConvention).length === 0) {
     container.innerHTML =
@@ -521,12 +575,26 @@ function renderNamingControlTable(documents, conventionRules) {
 
   const rows = documents
     .map((doc) => {
-      const parts = doc.name.replace(/\.[^/.]+$/, "").split("-"); // Sépare par '-' et enlève l'extension
+      // On doit transformer le nom en majuscules AVANT de le séparer si la règle est 'trigram'
+      const nameForParsing = doc.name.replace(/\.[^/.]+$/, ""); // Enlève l'extension
+      const parts = nameForParsing.split("-");
+
       const cells = conventionRules.columns
         .map((colRule, index) => {
-          const value = parts[index] || ""; // Prend la partie correspondante ou une chaîne vide
-          // Pour l'instant, pas de validation. Juste l'affichage.
-          return `<td>${value}</td>`;
+          let value = parts[index] || "";
+
+          // Pour les trigrammes, on s'assure que la valeur de comparaison est en majuscule
+          if (colRule.type === "trigram") {
+            value = value.toUpperCase();
+          }
+
+          const validationResult = validatePart(value, colRule);
+          const cellClass = validationResult.isValid ? "" : "invalid-cell";
+          const tooltipTitle = validationResult.isValid
+            ? ""
+            : `title="${validationResult.reason}"`;
+
+          return `<td class="${cellClass}" ${tooltipTitle}>${value}</td>`;
         })
         .join("");
 
