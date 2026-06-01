@@ -38,6 +38,7 @@ import {
   let currentProjectId = null;
   let isAdmin = false; // Variable pour stocker le statut administrateur
   let currentRuleState = null; //  notre variable d'état pour la gestions de colonnes de convention de nommage
+  let originalRuleNameToEdit = null;
 
   // --- INITIALISATION DE L'EXTENSION ---
   try {
@@ -214,14 +215,52 @@ import {
     document.querySelectorAll(".edit-rule-btn").forEach((button) => {
       button.addEventListener("click", (event) => {
         const ruleNameToEdit = event.target.dataset.ruleName;
-        // La logique de modification sera ajoutée ici
-        console.log(`Clic sur modifier pour : ${ruleNameToEdit}`);
+        handleEditNamingRule(ruleNameToEdit);
       });
     });
 
     document
       .getElementById("back-to-config-btn")
       .addEventListener("click", handleConfigNamingRuleClick);
+  }
+
+  async function handleEditNamingRule(ruleNameToEdit) {
+    renderLoading(mainContentDiv);
+    try {
+      const config = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const ruleToEdit = config.rules.find(
+        (rule) => rule.name === ruleNameToEdit,
+      );
+
+      if (!ruleToEdit) {
+        throw new Error(`La codification "${ruleNameToEdit}" est introuvable.`);
+      }
+
+      // On passe en mode édition
+      originalRuleNameToEdit = ruleNameToEdit;
+
+      // On initialise l'état avec les données de la règle à modifier
+      currentRuleState = {
+        name: ruleToEdit.name,
+        columns: ruleToEdit.columns,
+        editMode: "normal",
+      };
+
+      // On affiche la page de création/édition
+      renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+      // On attache les écouteurs d'événements de cette page
+      attachCreatePageListeners();
+    } catch (error) {
+      console.error(
+        `Erreur lors de la préparation de l'édition pour "${ruleNameToEdit}":`,
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
   }
 
   async function handleDeleteNamingRule(ruleNameToDelete) {
@@ -269,6 +308,7 @@ import {
 
   // FONCTION pour gerer les boutons de création de convention de nommage
   async function handleCreateNamingRuleClick() {
+    originalRuleNameToEdit = null; // Assure qu'on est bien en mode création
     // Initialise l'état pour une nouvelle règle
     currentRuleState = {
       name: "",
@@ -408,22 +448,45 @@ import {
       );
 
       const finalConfigurationData = existingConfig || { rules: [] };
-
-      // Vérifier si une règle avec ce nom existe déjà
-      if (
-        finalConfigurationData.rules.some(
-          (rule) => rule.name === currentRuleState.name,
-        )
-      ) {
-        alert(
-          `Une codification nommée "${currentRuleState.name}" existe déjà. Veuillez choisir un nom différent.`,
+      // --- LOGIQUE DE MISE À JOUR ---
+      if (originalRuleNameToEdit) {
+        // --- MODE ÉDITION ---
+        const ruleIndex = finalConfigurationData.rules.findIndex(
+          (rule) => rule.name === originalRuleNameToEdit,
         );
-        // On ne réaffiche pas la page pour que l'utilisateur puisse corriger le nom
-        renderCreateNamingRulePage(mainContentDiv, {
-          name: ruleName,
-          columns: [],
-        }); // Réaffiche la page avec les données actuelles
-        return;
+
+        if (ruleIndex === -1) {
+          throw new Error(
+            `Impossible de trouver la règle originale "${originalRuleNameToEdit}" à modifier.`,
+          );
+        }
+
+        const updatedRule = {
+          ...finalConfigurationData.rules[ruleIndex], // Conserve les dates de création
+          ...currentRuleState, // Applique les nouvelles données (nom, colonnes)
+          modifiedBy: userName,
+          modifiedAt: today,
+        };
+
+        finalConfigurationData.rules[ruleIndex] = updatedRule;
+        console.log(`Règle "${originalRuleNameToEdit}" modifiée.`);
+      } else {
+        // Vérifier si une règle avec ce nom existe déjà
+        if (
+          finalConfigurationData.rules.some(
+            (rule) => rule.name === currentRuleState.name,
+          )
+        ) {
+          alert(
+            `Une codification nommée "${currentRuleState.name}" existe déjà. Veuillez choisir un nom différent.`,
+          );
+          // On ne réaffiche pas la page pour que l'utilisateur puisse corriger le nom
+          renderCreateNamingRulePage(mainContentDiv, {
+            name: ruleName,
+            columns: [],
+          }); // Réaffiche la page avec les données actuelles
+          return;
+        }
       }
 
       const newRule = {
@@ -444,7 +507,7 @@ import {
         NAMING_CONFIG_FILENAME,
         configFolderId,
       );
-
+      originalRuleNameToEdit = null;
       // 5. Fournir un retour à l'utilisateur
       renderSuccess(
         mainContentDiv,
