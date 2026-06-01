@@ -428,7 +428,66 @@ function renderManageNamingRulesPage(container, rules) {
   `;
 }
 
-// Exporter toutes les fonctions désormais
+// FONCTION pour affectation des conventions aux dossiers
+function renderAssignNamingPage(container, projectName) {
+  container.innerHTML = `
+    <div class="affectation-page-container">
+      <h1>Affectation d'une codification à un dossier</h1>
+      <p>Projet : <strong>${projectName}</strong></p>
+
+      <div class="affectation-layout-grid">
+        <div class="folder-browser-container">
+          <ul id="folder-tree-root" class="folder-tree">
+            <li class="loading-node">Chargement de l'arborescence...</li>
+          </ul>
+        </div>
+        <div id="assignment-panel" class="assignment-panel">
+          <div class="assignment-panel-placeholder">
+            <p>Veuillez sélectionner un dossier pour lui affecter une codification.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button id="back-to-config-btn" class="button-secondary">Retour à la Configuration</button>
+        <button id="save-all-assignments-btn" class="button-primary">Sauvegarder les affectations</button>
+      </div>
+    </div>
+  `;
+}
+
+//  FONCTION pour affectation des conventions aux dossiers
+function updateAssignmentPanel(folder, allRuleNames, currentAssignedRule) {
+  const panel = document.getElementById("assignment-panel");
+  if (!panel) return;
+
+  const ruleOptions = allRuleNames
+    .map(
+      (name) =>
+        `<option value="${name}" ${name === currentAssignedRule ? "selected" : ""}>${name}</option>`,
+    )
+    .join("");
+
+  panel.innerHTML = `
+    <div class="assignment-panel-content">
+      <h3>Dossier Sélectionné</h3>
+      <p class="selected-folder-name">${folder.name}</p>
+      <div class="form-group">
+        <label for="rule-assignment-select">Codification à affecter :</label>
+        <select id="rule-assignment-select">
+          <option value="">-- Aucune codification --</option>
+          ${ruleOptions}
+        </select>
+      </div>
+      <div class="heredity-checkbox-container" title="Si coché, la codification sera appliquée à ce dossier et à tous ses sous-dossiers.">
+        <input type="checkbox" id="heredity-checkbox">
+        <label for="heredity-checkbox">Appliquer l'hérédité</label>
+      </div>
+    </div>
+  `;
+}
+
+// Exporter toutes les fonctions
 export {
   renderLoading,
   renderError,
@@ -441,4 +500,6 @@ export {
   renderCreateNamingRulePage,
   renderAddColumnModal,
   renderManageNamingRulesPage,
+  renderAssignNamingPage,
+  updateAssignmentPanel,
 };
