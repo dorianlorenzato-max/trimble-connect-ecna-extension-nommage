@@ -530,3 +530,8 @@ body {
   /* Détachement visuel simple */
   border-right: 3px solid #005a70;
 }
+
+/* Style pour les cellules invalides */
+.control-table .invalid-cell {
+  background-color: #fddede; /* Rouge pâle */
+}
