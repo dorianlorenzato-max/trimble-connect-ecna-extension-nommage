@@ -23,6 +23,8 @@ import {
   renderCreateNamingRulePage,
   renderAddColumnModal,
   renderManageNamingRulesPage,
+  renderAssignNamingPage,
+  updateAssignmentPanel,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -164,9 +166,7 @@ import {
         .addEventListener("click", handleManageNamingRulesClick);
       document
         .getElementById("assign-naming-btn")
-        .addEventListener("click", () =>
-          console.log("Clic sur Affecter les codifications"),
-        ); // Temporaire
+        .addEventListener("click", handleAssignNamingRulesClick);
 
       // Charger et rendre le tableau récapitulatif
       await loadAndRenderNamingSummary();
@@ -194,6 +194,171 @@ import {
       console.error("Erreur lors du chargement des règles de nommage :", error);
       renderError(mainContentDiv, error);
     }
+  }
+
+  // Fonction pour affecter une convention à des dossiers
+  async function handleAssignNamingRulesClick() {
+    if (!triconnectAPI || !globalAccessToken) {
+      renderError(mainContentDiv, new Error("Extension non initialisée."));
+      return;
+    }
+
+    renderLoading(mainContentDiv);
+    try {
+      const projectInfo = await triconnectAPI.project.getCurrentProject();
+
+      const [namingConfig, assignmentsConfig, rootSubfolders] =
+        await Promise.all([
+          fetchConfigurationFile(
+            globalAccessToken,
+            configFolderId,
+            NAMING_CONFIG_FILENAME,
+          ),
+          fetchConfigurationFile(
+            globalAccessToken,
+            configFolderId,
+            NAMING_ASSIGNMENTS_FILENAME,
+          ),
+          getRootFolders(triconnectAPI, globalAccessToken),
+        ]);
+
+      // Stockage des données pour réutilisation
+      const allNamingRules = namingConfig ? namingConfig.rules : [];
+      const currentAssignments = assignmentsConfig || {};
+      let pendingChanges = {}; // Pour suivre les modifs non sauvegardées
+
+      renderAssignNamingPage(mainContentDiv, projectInfo.name);
+
+      const treeRootElement = document.getElementById("folder-tree-root");
+      treeRootElement.innerHTML = ""; // Vider l'arbre
+
+      renderAndAttachFolderListeners(
+        treeRootElement,
+        rootSubfolders,
+        allNamingRules,
+        currentAssignments,
+        pendingChanges,
+      );
+
+      document
+        .getElementById("back-to-config-btn")
+        .addEventListener("click", handleConfigNamingRuleClick);
+      // La logique de sauvegarde sera ajoutée plus tard
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement de la page d'affectation :",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  //FONCTION pour la gestion d'affectation des conventions
+  function displayFolderAssignmentDetails(
+    folder,
+    allNamingRules,
+    currentAssignments,
+    pendingChanges,
+  ) {
+    const assignedRuleName =
+      pendingChanges[folder.id] ?? currentAssignments[folder.id] ?? null;
+    const allRuleNames = allNamingRules.map((r) => r.name);
+
+    updateAssignmentPanel(folder, allRuleNames, assignedRuleName);
+
+    // La logique pour l'hérédité et la sauvegarde sera ajoutée ici dans une prochaine étape
+  }
+
+  function renderAndAttachFolderListeners(
+    parentElement,
+    folders,
+    allNamingRules,
+    currentAssignments,
+    pendingChanges,
+  ) {
+    if (!folders || folders.length === 0) {
+      const noSubfolderItem = document.createElement("li");
+      noSubfolderItem.className = "folder-item-empty";
+      noSubfolderItem.textContent = "Aucun sous-dossier";
+      parentElement.appendChild(noSubfolderItem);
+      return;
+    }
+
+    folders.forEach((folder) => {
+      const listItem = document.createElement("li");
+      listItem.className = "folder-item";
+      listItem.dataset.folderId = folder.id;
+      listItem.dataset.folderName = folder.name;
+      listItem.dataset.loaded = "false"; // Pour savoir si on a déjà chargé les sous-dossiers
+
+      const folderNameSpan = document.createElement("span");
+      folderNameSpan.className = "folder-name";
+      folderNameSpan.textContent = folder.name;
+
+      listItem.appendChild(folderNameSpan);
+      parentElement.appendChild(listItem);
+
+      folderNameSpan.addEventListener("click", async (event) => {
+        event.stopPropagation();
+
+        // Gère la surbrillance
+        document
+          .querySelectorAll(".folder-item.selected")
+          .forEach((el) => el.classList.remove("selected"));
+        listItem.classList.add("selected");
+
+        // Affiche le panneau de droite
+        displayFolderAssignmentDetails(
+          { id: folder.id, name: folder.name },
+          allNamingRules,
+          currentAssignments,
+          pendingChanges,
+        );
+
+        // Logique pour déplier/replier ou charger les sous-dossiers
+        if (listItem.dataset.loaded === "true") {
+          const subList = listItem.querySelector("ul");
+          if (subList) {
+            subList.style.display =
+              subList.style.display === "none" ? "block" : "none";
+          }
+          return;
+        }
+
+        // Affiche un message de chargement
+        const loadingSpan = document.createElement("span");
+        loadingSpan.textContent = " (chargement...)";
+        loadingSpan.style.fontStyle = "italic";
+        folderNameSpan.appendChild(loadingSpan);
+
+        try {
+          const subFolders = await fetchFolderContents(
+            folder.id,
+            globalAccessToken,
+          );
+          const subList = document.createElement("ul");
+          subList.className = "folder-tree";
+          listItem.appendChild(subList);
+
+          // Appel récursif pour les sous-dossiers
+          renderAndAttachFolderListeners(
+            subList,
+            subFolders,
+            allNamingRules,
+            currentAssignments,
+            pendingChanges,
+          );
+
+          listItem.dataset.loaded = "true";
+        } catch (error) {
+          console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+          folderNameSpan.textContent += " (erreur)";
+        } finally {
+          // Retire le message de chargement
+          folderNameSpan.removeChild(loadingSpan);
+        }
+      });
+    });
   }
 
   // FONCTION pour attacher les événements de la page de gestion
