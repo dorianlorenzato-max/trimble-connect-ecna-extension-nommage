@@ -136,10 +136,26 @@ function renderCreateNamingRulePage(container, ruleData) {
     ? `Édition de la codification : ${ruleData.name}`
     : "Création d'une nouvelle codification de nommage";
 
-  // Pour l'instant, le tableau est statique. Il sera rendu dynamiquement plus tard.
+  // Ajoute une classe CSS lorsque le mode réorganisation est actif
+  const tableWrapperClass =
+    ruleData.editMode === "reorder" ? "reorder-mode" : "";
+
   const tableHeaders =
     ruleData.columns.length > 0
-      ? ruleData.columns.map((col) => `<th>${col.name}</th>`).join("")
+      ? ruleData.columns
+          .map((col, index) => {
+            // Affiche l'icône de poubelle si en mode suppression
+            const deleteIcon =
+              ruleData.editMode === "delete"
+                ? `<span class="delete-column-icon" data-column-index="${index}">&#128465;</span>`
+                : "";
+            // Ajoute une classe pour le glisser-déposer
+            const thClass =
+              ruleData.editMode === "reorder" ? "draggable-column" : "";
+
+            return `<th class="${thClass}">${deleteIcon}${col.name}</th>`;
+          })
+          .join("")
       : "<th>(Aucune colonne)</th>";
 
   const typeDisplayMap = {
@@ -179,8 +195,8 @@ function renderCreateNamingRulePage(container, ruleData) {
 
         <div class="naming-rule-actions">
             <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
-            <button id="reorder-columns-btn" class="button-secondary">Réorganiser colonnes</button>
-            <button id="delete-column-mode-btn" class="button-secondary">Supprimer colonne</button>
+            <button id="reorder-columns-btn" class="button-secondary ${ruleData.editMode === "reorder" ? "active-mode" : ""}">Réorganiser colonnes</button>
+            <button id="delete-column-mode-btn" class="button-secondary ${ruleData.editMode === "delete" ? "active-mode" : ""}">Supprimer colonne</button>
         </div>
 
         <div class="naming-rule-preview-container">
