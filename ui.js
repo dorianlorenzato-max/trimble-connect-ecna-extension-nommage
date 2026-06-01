@@ -140,10 +140,10 @@ function renderCreateNamingRulePage(container, ruleData) {
   let editModeDescription = "";
   if (ruleData.editMode === "reorder") {
     editModeDescription =
-      "Cliquez et glissez les en-têtes de colonnes pour les réorganiser.";
+      'Cliquer-glisser les en-têtes de colonnes pour les réorganiser. Cliquer de nouveau sur "Réorganiser colonnes" pour valider la réorganisation';
   } else if (ruleData.editMode === "delete") {
     editModeDescription =
-      'Cliquez sur l\'icône de poubelle pour marquer une colonne à supprimer. Cliquez à nouveau sur le bouton "Supprimer" pour valider la suppresion.';
+      'Cliquer sur l\'icône de "poubelle" pour marquer une colonne à supprimer. Cliquer à nouveau sur le bouton "Supprimer colonne" pour valider la suppresion.';
   }
 
   // Ajoute une classe CSS lorsque le mode réorganisation est actif
@@ -382,6 +382,52 @@ function renderAddColumnModal(onConfirmCallback) {
       });
     });
 }
+
+function renderManageNamingRulesPage(container, rules) {
+  const tableRows =
+    rules.length > 0
+      ? rules
+          .map(
+            (rule) => `
+        <tr>
+          <td>${rule.name}</td>
+          <td>${rule.columns.length}</td>
+          <td>${rule.columns.map((c) => c.name).join(", ")}</td>
+          <td class="actions-cell">
+            <button class="button-secondary button-small edit-rule-btn" data-rule-name="${rule.name}">Modifier</button>
+            <button class="button-danger button-small delete-rule-btn" data-rule-name="${rule.name}">Supprimer</button>
+          </td>
+        </tr>
+      `,
+          )
+          .join("")
+      : '<tr><td colspan="4" style="text-align:center;">Aucune codification configurée.</td></tr>';
+
+  container.innerHTML = `
+    <div class="management-page-container">
+      <h1>Gestion des Codifications de Nommage</h1>
+      <div class="management-table-wrapper">
+        <table class="management-table">
+          <thead>
+            <tr>
+              <th>Nom de la Codification</th>
+              <th>Nombre de colonnes</th>
+              <th>Colonnes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+      <div class="form-actions">
+        <button id="back-to-config-btn" class="button-secondary">Retour à la Configuration</button>
+      </div>
+    </div>
+  `;
+}
+
 // Exporter toutes les fonctions désormais
 export {
   renderLoading,
@@ -394,4 +440,5 @@ export {
   renderNamingConfigSummaryTable,
   renderCreateNamingRulePage,
   renderAddColumnModal,
+  renderManageNamingRulesPage,
 };
