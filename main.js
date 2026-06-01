@@ -243,7 +243,11 @@ import {
       document
         .getElementById("back-to-config-btn")
         .addEventListener("click", handleConfigNamingRuleClick);
-      // La logique de sauvegarde sera ajoutée plus tard
+      document
+        .getElementById("save-all-assignments-btn")
+        .addEventListener("click", () =>
+          handleSaveAllAssignments(currentAssignments, pendingChanges),
+        );
     } catch (error) {
       console.error(
         "Erreur lors du chargement de la page d'affectation :",
@@ -252,7 +256,36 @@ import {
       renderError(mainContentDiv, error);
     }
   }
+  // Fonction de sauvagarde des conventions affectées
+  async function handleSaveAllAssignments(currentAssignments, pendingChanges) {
+    if (Object.keys(pendingChanges).length === 0) {
+      alert("Aucune modification à sauvegarder.");
+      return;
+    }
 
+    renderSaving(mainContentDiv);
+    const finalAssignments = { ...currentAssignments, ...pendingChanges };
+
+    try {
+      await saveConfigurationFile(
+        triconnectAPI,
+        globalAccessToken,
+        finalAssignments,
+        NAMING_ASSIGNMENTS_FILENAME,
+        configFolderId,
+      );
+
+      renderSuccess(
+        mainContentDiv,
+        "Les affectations ont été sauvegardées avec succès.",
+      );
+      // On recharge la page pour que les modifications soient prises en compte comme état de base
+      setTimeout(handleAssignNamingRulesClick, 1500);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde des affectations:", error);
+      renderError(mainContentDiv, error);
+    }
+  }
   //FONCTION pour la gestion d'affectation des conventions
   function displayFolderAssignmentDetails(
     folder,
@@ -266,7 +299,38 @@ import {
 
     updateAssignmentPanel(folder, allRuleNames, assignedRuleName);
 
-    // La logique pour l'hérédité et la sauvegarde sera ajoutée ici dans une prochaine étape
+    const selectElement = document.getElementById("rule-assignment-select");
+    const heredityCheckbox = document.getElementById("heredity-checkbox");
+
+    const applyChanges = async () => {
+      const selectedRule = selectElement.value;
+      // Mettre à jour la modification pour le dossier parent
+      pendingChanges[folder.id] = selectedRule;
+
+      // Appliquer l'hérédité si la case est cochée
+      if (heredityCheckbox.checked && selectedRule) {
+        console.log(
+          `Application de l'hérédité pour le dossier ${folder.name}...`,
+        );
+        try {
+          const allSubIds = await recursivelyFetchAllSubfolders(
+            folder.id,
+            globalAccessToken,
+          );
+          allSubIds.forEach((subId) => {
+            pendingChanges[subId] = selectedRule;
+          });
+          console.log(
+            `Hérédité appliquée à ${allSubIds.length} sous-dossier(s).`,
+          );
+        } catch (error) {
+          console.error("Erreur lors de l'application de l'hérédité:", error);
+        }
+      }
+    };
+
+    selectElement.addEventListener("change", applyChanges);
+    heredityCheckbox.addEventListener("change", applyChanges);
   }
 
   function renderAndAttachFolderListeners(
