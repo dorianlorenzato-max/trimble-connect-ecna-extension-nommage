@@ -364,6 +364,93 @@ async function fetchUserProjectRole(projectId, accessToken) {
   return userProjectDetails.role;
 }
 
+// FONCTION pour mapper tous les utilisateurs à leurs groupes
+async function getUsersToGroupsMap(projectId, accessToken) {
+  const map = new Map();
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const groups = await fetchProjectGroups(projectId, accessToken);
+
+  for (const group of groups) {
+    const usersResponse = await fetch(
+      `https://app21.connect.trimble.com/tc/api/2.0/groups/${group.id}/users`,
+      { headers },
+    );
+    if (usersResponse.ok) {
+      const users = await usersResponse.json();
+      users.forEach((user) => {
+        if (!map.has(user.id)) {
+          map.set(user.id, []);
+        }
+        map.get(user.id).push(group.id);
+      });
+    }
+  }
+  return map;
+}
+
+//  FONCTION principale pour récupérer tous les documents à contrôler
+async function fetchAllControlledDocuments(
+  triconnectAPI,
+  accessToken,
+  allAssignments,
+  isAdmin,
+) {
+  const projectInfo = await triconnectAPI.project.getCurrentProject();
+  const projectId = projectInfo.id;
+  const assignedFolderIds = Object.keys(allAssignments);
+
+  if (assignedFolderIds.length === 0) return [];
+
+  let allDocuments = [];
+  for (const folderId of assignedFolderIds) {
+    const conventionName = allAssignments[folderId];
+    try {
+      const folderContentResponse = await fetch(
+        `https://app21.connect.trimble.com/tc/api/2.0/folders/${folderId}/items?recursive=true&include=details`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      if (folderContentResponse.ok) {
+        const items = await folderContentResponse.json();
+        items.forEach((item) => {
+          if (item.type === "FILE") {
+            allDocuments.push({
+              ...item,
+              conventionName: conventionName,
+              depositor: item.modifiedBy
+                ? `${item.modifiedBy.firstName} ${item.modifiedBy.lastName}`.trim()
+                : "Inconnu",
+              depositorId: item.modifiedBy ? item.modifiedBy.id : null,
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.warn(
+        `Impossible de récupérer le contenu du dossier ${folderId}`,
+        error,
+      );
+    }
+  }
+
+  // Filtrage par permissions si l'utilisateur n'est pas admin
+  if (!isAdmin) {
+    const currentUser = await fetchLoggedInUserDetails(accessToken);
+    const usersToGroupsMap = await getUsersToGroupsMap(projectId, accessToken);
+    const currentUserGroupIds = usersToGroupsMap.get(currentUser.id) || [];
+
+    return allDocuments.filter((doc) => {
+      const depositorGroupIds = usersToGroupsMap.get(doc.depositorId) || [];
+      // On garde le document si au moins un groupe est en commun
+      return depositorGroupIds.some((groupId) =>
+        currentUserGroupIds.includes(groupId),
+      );
+    });
+  }
+
+  return allDocuments;
+}
 // On exporte les fonctions pour qu'elles soient utilisables dans main.js
 export {
   fetchProjectGroups,
@@ -378,4 +465,6 @@ export {
   recursivelyFetchAllSubfolders,
   fetchAllProjectFolders,
   fetchUserProjectRole,
+  getUsersToGroupsMap,
+  fetchAllControlledDocuments,
 };
