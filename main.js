@@ -136,6 +136,59 @@ import {
       "<h2>Aide à la Codification (à développer)</h2><p>Contenu de l'aide...</p>";
   }
 
+  function validatePart(value, rule) {
+    // 1. Gérer le cas "non obligatoire"
+    if (!rule.required && !value) {
+      return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
+    }
+
+    // 2. Gérer le cas "obligatoire" mais vide
+    if (rule.required && !value) {
+      return { isValid: false, reason: "Valeur obligatoire manquante" };
+    }
+
+    // 3. Validation par type
+    switch (rule.type) {
+      case "text":
+        return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
+      case "list":
+        const isValid = rule.values.some((v) => v.value === value);
+        return {
+          isValid,
+          reason: isValid
+            ? ""
+            : `La valeur "${value}" n'est pas dans la liste autorisée.`,
+        };
+      case "number1":
+        const isNumber1 = /^\d{1}$/.test(value);
+        return {
+          isValid: isNumber1,
+          reason: isNumber1 ? "" : "Doit être un chiffre unique.",
+        };
+      case "number2":
+        const isNumber2 = /^\d{2}$/.test(value);
+        return {
+          isValid: isNumber2,
+          reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
+        };
+      case "number3":
+        const isNumber3 = /^\d{3}$/.test(value);
+        return {
+          isValid: isNumber3,
+          reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
+        };
+      case "trigram":
+        const isTrigram = /^[A-Z]{3}$/.test(value);
+        return {
+          isValid: isTrigram,
+          reason: isTrigram
+            ? ""
+            : "Doit être un trigramme en majuscules (3 lettres).",
+        };
+      default:
+        return { isValid: true }; // Type inconnu, on ne bloque pas
+    }
+  }
   async function handleControlNamingClick() {
     renderLoading(mainContentDiv);
     try {
