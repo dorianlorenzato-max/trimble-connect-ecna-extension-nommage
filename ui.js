@@ -487,14 +487,81 @@ function updateAssignmentPanel(folder, allRuleNames, currentAssignedRule) {
   `;
 }
 
+function renderControlPage(container, documentsByConvention, allRules) {
+  if (Object.keys(documentsByConvention).length === 0) {
+    container.innerHTML =
+      "<h1>Contrôle des Nommages</h1><p>Aucun document trouvé dans les dossiers configurés.</p>";
+    return;
+  }
+
+  let html = "<h1>Contrôle des Nommages</h1>";
+
+  for (const conventionName in documentsByConvention) {
+    const conventionRules = allRules.find((r) => r.name === conventionName);
+    const documents = documentsByConvention[conventionName];
+
+    html += `
+      <div class="control-convention-section">
+        <h2>Convention : ${conventionName}</h2>
+        ${renderNamingControlTable(documents, conventionRules)}
+      </div>
+    `;
+  }
+  container.innerHTML = html;
+}
+
+function renderNamingControlTable(documents, conventionRules) {
+  if (!conventionRules || conventionRules.columns.length === 0) {
+    return "<p>Cette convention n'a pas de colonnes définies.</p>";
+  }
+
+  const headers = conventionRules.columns
+    .map((col) => `<th>${col.name}</th>`)
+    .join("");
+
+  const rows = documents
+    .map((doc) => {
+      const parts = doc.name.replace(/\.[^/.]+$/, "").split("-"); // Sépare par '-' et enlève l'extension
+      const cells = conventionRules.columns
+        .map((colRule, index) => {
+          const value = parts[index] || ""; // Prend la partie correspondante ou une chaîne vide
+          // Pour l'instant, pas de validation. Juste l'affichage.
+          return `<td>${value}</td>`;
+        })
+        .join("");
+
+      return `
+      <tr>
+        <td class="depositor-cell">${doc.depositor}</td>
+        ${cells}
+      </tr>
+    `;
+    })
+    .join("");
+
+  return `
+    <div class="control-table-wrapper">
+      <table class="control-table">
+        <thead>
+          <tr>
+            <th class="depositor-cell">Dépositaire</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 // Exporter toutes les fonctions
 export {
   renderLoading,
   renderError,
-  renderWelcome, // Gardée pour une utilisation générique
+  renderWelcome,
   renderSaving,
   renderSuccess,
-  renderHomePageWithButtons, // Nouvelle fonction d'accueil
+  renderHomePageWithButtons,
   renderConfigPage,
   renderNamingConfigSummaryTable,
   renderCreateNamingRulePage,
@@ -502,4 +569,5 @@ export {
   renderManageNamingRulesPage,
   renderAssignNamingPage,
   updateAssignmentPanel,
+  renderControlPage,
 };
