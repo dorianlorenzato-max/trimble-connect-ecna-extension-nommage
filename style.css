@@ -313,3 +313,52 @@ body {
   border: none;
   padding: 5px;
 }
+
+/* === STYLES POUR LES MODES D'ÉDITION === */
+
+/* Style pour le bouton du mode actif */
+.naming-rule-actions .active-mode {
+  background-color: #005a70;
+  color: white;
+  border: 1px solid #003a72;
+}
+
+/* Style de surbrillance pour le mode réorganisation */
+.naming-rule-preview-table-wrapper.reorder-mode {
+  box-shadow: 0 0 15px rgba(0, 90, 112, 0.5);
+  border-color: #005a70;
+}
+
+/* Style pour le curseur en mode réorganisation */
+.draggable-column {
+  cursor: grab;
+}
+.draggable-column:active {
+  cursor: grabbing;
+}
+
+/* Style pour l'icône de suppression */
+.naming-rule-preview-table th {
+  position: relative; /* Contexte pour le positionnement de l'icône */
+}
+.delete-column-icon {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: #d9534f;
+  background-color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.delete-column-icon:hover {
+  background-color: #d9534f;
+  color: white;
+}
