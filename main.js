@@ -11,6 +11,7 @@ import {
   fetchAllProjectFolders,
   recursivelyFetchAllSubfolders,
   fetchAllControlledDocuments,
+  uploadFileWithNewName,
 } from "./api.js";
 import {
   renderLoading,
@@ -394,25 +395,32 @@ import {
   async function handleFinalUpload(convention) {
     const { file, selectedFolderId } = helpCodificationState;
     if (!file || !selectedFolderId) {
-      alert("Veuillez sélectionner un fichier et un dossier.");
+      alert("Veuillez sélectionner un fichier et un dossier de destination.");
       return;
     }
+
     let finalFileName = file.name;
     if (convention) {
       const finalNamePreview =
         document.getElementById("final-name-preview").textContent;
       if (!finalNamePreview || document.querySelector(".invalid-input")) {
-        alert("Le nom du fichier n'est pas valide.");
+        alert("Le nom du fichier n'est pas valide ou complet.");
         return;
       }
       finalFileName = finalNamePreview;
     }
+
     renderSaving(mainContentDiv);
+
     try {
-      await triconnectAPI.file.uploadFile(
+      // Utilisation de notre nouvelle fonction robuste
+      await uploadFileWithNewName(
+        triconnectAPI,
+        globalAccessToken,
         selectedFolderId,
         new File([file], finalFileName, { type: file.type }),
       );
+
       renderSuccess(
         mainContentDiv,
         `Le fichier "${finalFileName}" a été déposé avec succès !`,
@@ -591,59 +599,59 @@ import {
   }
   // ----------------------------------
   function validatePart(value, rule) {
-      // 1. Gérer le cas "non obligatoire"
-      if (!rule.required && !value) {
-        return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
-      }
-
-      // 2. Gérer le cas "obligatoire" mais vide
-      if (rule.required && !value) {
-        return { isValid: false, reason: "Valeur obligatoire manquante" };
-      }
-
-      // 3. Validation par type
-      switch (rule.type) {
-        case "text":
-          return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
-        case "list":
-          const isValid = rule.values.some((v) => v.value === value);
-          return {
-            isValid,
-            reason: isValid
-              ? ""
-              : `La valeur "${value}" n'est pas dans la liste autorisée.`,
-          };
-        case "number1":
-          const isNumber1 = /^\d{1}$/.test(value);
-          return {
-            isValid: isNumber1,
-            reason: isNumber1 ? "" : "Doit être un chiffre unique.",
-          };
-        case "number2":
-          const isNumber2 = /^\d{2}$/.test(value);
-          return {
-            isValid: isNumber2,
-            reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
-          };
-        case "number3":
-          const isNumber3 = /^\d{3}$/.test(value);
-          return {
-            isValid: isNumber3,
-            reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
-          };
-        case "trigram":
-          const isTrigram = /^[A-Z]{3}$/.test(value);
-          return {
-            isValid: isTrigram,
-            reason: isTrigram
-              ? ""
-              : "Doit être un trigramme en majuscules (3 lettres).",
-          };
-        default:
-          return { isValid: true }; // Type inconnu, on ne bloque pas
-      }
+    // 1. Gérer le cas "non obligatoire"
+    if (!rule.required && !value) {
+      return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
     }
-   async function handleManageNamingRulesClick() {
+
+    // 2. Gérer le cas "obligatoire" mais vide
+    if (rule.required && !value) {
+      return { isValid: false, reason: "Valeur obligatoire manquante" };
+    }
+
+    // 3. Validation par type
+    switch (rule.type) {
+      case "text":
+        return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
+      case "list":
+        const isValid = rule.values.some((v) => v.value === value);
+        return {
+          isValid,
+          reason: isValid
+            ? ""
+            : `La valeur "${value}" n'est pas dans la liste autorisée.`,
+        };
+      case "number1":
+        const isNumber1 = /^\d{1}$/.test(value);
+        return {
+          isValid: isNumber1,
+          reason: isNumber1 ? "" : "Doit être un chiffre unique.",
+        };
+      case "number2":
+        const isNumber2 = /^\d{2}$/.test(value);
+        return {
+          isValid: isNumber2,
+          reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
+        };
+      case "number3":
+        const isNumber3 = /^\d{3}$/.test(value);
+        return {
+          isValid: isNumber3,
+          reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
+        };
+      case "trigram":
+        const isTrigram = /^[A-Z]{3}$/.test(value);
+        return {
+          isValid: isTrigram,
+          reason: isTrigram
+            ? ""
+            : "Doit être un trigramme en majuscules (3 lettres).",
+        };
+      default:
+        return { isValid: true }; // Type inconnu, on ne bloque pas
+    }
+  }
+  async function handleManageNamingRulesClick() {
     renderLoading(mainContentDiv);
     try {
       const config = await fetchConfigurationFile(
@@ -659,118 +667,116 @@ import {
       renderError(mainContentDiv, error);
     }
   }
-// fonction d'export pdf
-    async function handleExportControlPDF(documentsByConvention, allRules) {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4" });
-      const today = new Date().toLocaleDateString();
+  // fonction d'export pdf
+  async function handleExportControlPDF(documentsByConvention, allRules) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4" });
+    const today = new Date().toLocaleDateString();
 
-      doc.setFontSize(18).text("Rapport de Contrôle de Nommage", 14, 22);
-      doc.setFontSize(11).text(`Date de l'export : ${today}`, 14, 30);
+    doc.setFontSize(18).text("Rapport de Contrôle de Nommage", 14, 22);
+    doc.setFontSize(11).text(`Date de l'export : ${today}`, 14, 30);
 
-      let startY = 40;
+    let startY = 40;
 
-      for (const conventionName in documentsByConvention) {
-        const conventionRules = allRules.find((r) => r.name === conventionName);
-        if (!conventionRules) continue;
+    for (const conventionName in documentsByConvention) {
+      const conventionRules = allRules.find((r) => r.name === conventionName);
+      if (!conventionRules) continue;
 
-        doc.setFontSize(14).text(`Convention : ${conventionName}`, 14, startY);
-        startY += 7;
+      doc.setFontSize(14).text(`Convention : ${conventionName}`, 14, startY);
+      startY += 7;
 
-        const head = [
-          ["Dépositaire", ...conventionRules.columns.map((c) => c.name)],
-        ];
-        const body = documentsByConvention[conventionName].map((doc) => {
-          const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
-          const row = [doc.depositor];
+      const head = [
+        ["Dépositaire", ...conventionRules.columns.map((c) => c.name)],
+      ];
+      const body = documentsByConvention[conventionName].map((doc) => {
+        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const row = [doc.depositor];
 
-          conventionRules.columns.forEach((colRule, index) => {
-            let value = parts[index] || "";
-            if (colRule.type === "trigram") value = value.toUpperCase();
+        conventionRules.columns.forEach((colRule, index) => {
+          let value = parts[index] || "";
+          if (colRule.type === "trigram") value = value.toUpperCase();
 
-            const validationResult = validatePart(value, colRule);
-            if (validationResult.isValid) {
-              row.push(value);
-            } else {
-              row.push({
-                content: value,
-                styles: { fillColor: [253, 222, 222] }, // Rouge pâle
-              });
-            }
-          });
-          return row;
+          const validationResult = validatePart(value, colRule);
+          if (validationResult.isValid) {
+            row.push(value);
+          } else {
+            row.push({
+              content: value,
+              styles: { fillColor: [253, 222, 222] }, // Rouge pâle
+            });
+          }
         });
-
-        doc.autoTable({
-          head: head,
-          body: body,
-          startY: startY,
-          theme: "grid",
-          headStyles: { fillColor: [0, 58, 114] },
-        });
-
-        startY = doc.autoTable.previous.finalY + 15; // Espace pour la prochaine table
-      }
-
-      doc.save(
-        `Controle_Nommage_${new Date().toISOString().split("T")[0]}.pdf`,
-      );
-    }
-    //  FONCTION pour l'export Excel (CSV)
-    async function handleExportControlExcel(documentsByConvention, allRules) {
-      let csvRows = [];
-
-      for (const conventionName in documentsByConvention) {
-        const conventionRules = allRules.find((r) => r.name === conventionName);
-        if (!conventionRules) continue;
-
-        // Ajoute un titre pour la section
-        csvRows.push(`Convention: ${conventionName}`);
-
-        const headers = [
-          "Dépositaire",
-          ...conventionRules.columns.map((c) => c.name),
-        ];
-        csvRows.push(headers.join(";"));
-
-        documentsByConvention[conventionName].forEach((doc) => {
-          const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
-          const row = [doc.depositor];
-
-          conventionRules.columns.forEach((colRule, index) => {
-            let value = parts[index] || "";
-            if (colRule.type === "trigram") value = value.toUpperCase();
-
-            const validationResult = validatePart(value, colRule);
-            if (validationResult.isValid) {
-              row.push(`"${value}"`); // Mettre entre guillemets pour éviter les problèmes avec les virgules
-            } else {
-              row.push(`"[ERREUR] ${value}"`);
-            }
-          });
-          csvRows.push(row.join(";"));
-        });
-
-        csvRows.push(""); // Ligne vide pour séparer les conventions
-      }
-
-      const csvString = csvRows.join("\n");
-      const blob = new Blob([`\uFEFF${csvString}`], {
-        type: "text/csv;charset=utf-8;",
+        return row;
       });
 
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute(
-        "download",
-        `Controle_Nommage_${new Date().toISOString().split("T")[0]}.csv`,
-      );
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      doc.autoTable({
+        head: head,
+        body: body,
+        startY: startY,
+        theme: "grid",
+        headStyles: { fillColor: [0, 58, 114] },
+      });
+
+      startY = doc.autoTable.previous.finalY + 15; // Espace pour la prochaine table
     }
+
+    doc.save(`Controle_Nommage_${new Date().toISOString().split("T")[0]}.pdf`);
+  }
+  //  FONCTION pour l'export Excel (CSV)
+  async function handleExportControlExcel(documentsByConvention, allRules) {
+    let csvRows = [];
+
+    for (const conventionName in documentsByConvention) {
+      const conventionRules = allRules.find((r) => r.name === conventionName);
+      if (!conventionRules) continue;
+
+      // Ajoute un titre pour la section
+      csvRows.push(`Convention: ${conventionName}`);
+
+      const headers = [
+        "Dépositaire",
+        ...conventionRules.columns.map((c) => c.name),
+      ];
+      csvRows.push(headers.join(";"));
+
+      documentsByConvention[conventionName].forEach((doc) => {
+        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const row = [doc.depositor];
+
+        conventionRules.columns.forEach((colRule, index) => {
+          let value = parts[index] || "";
+          if (colRule.type === "trigram") value = value.toUpperCase();
+
+          const validationResult = validatePart(value, colRule);
+          if (validationResult.isValid) {
+            row.push(`"${value}"`); // Mettre entre guillemets pour éviter les problèmes avec les virgules
+          } else {
+            row.push(`"[ERREUR] ${value}"`);
+          }
+        });
+        csvRows.push(row.join(";"));
+      });
+
+      csvRows.push(""); // Ligne vide pour séparer les conventions
+    }
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([`\uFEFF${csvString}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `Controle_Nommage_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
   // Fonction pour affecter une convention à des dossiers
   async function handleAssignNamingRulesClick() {
     if (!triconnectAPI || !globalAccessToken) {
