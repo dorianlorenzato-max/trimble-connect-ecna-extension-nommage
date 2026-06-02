@@ -135,17 +135,19 @@ import {
   async function handleHelpNamingClick() {
     renderLoading(mainContentDiv);
     try {
-      // Réinitialiser l'état à chaque fois qu'on affiche la page
+      // Réinitialiser l'état
       helpCodificationState = { file: null, selectedFolderId: null };
 
       renderHelpCodificationPage(mainContentDiv);
       attachHelpPageListeners();
 
-      // Charger l'arborescence des dossiers en respectant les permissions
+      // Charger l'arborescence racine en utilisant l'API
       const rootFolders = await triconnectAPI.folder.getFolders();
       const treeRootElement = document.getElementById("folder-tree-root");
-      treeRootElement.innerHTML = "";
-      renderPermissionAwareFolderTree(treeRootElement, rootFolders);
+      if (treeRootElement) {
+        treeRootElement.innerHTML = "";
+        renderPermissionAwareFolderTree(treeRootElement, rootFolders);
+      }
     } catch (error) {
       console.error("Erreur lors de l'affichage de la page d'aide :", error);
       renderError(mainContentDiv, error);
@@ -192,18 +194,64 @@ import {
 
   //  FONCTION pour gérer l'arborescence avec permissions
   function renderPermissionAwareFolderTree(parentElement, folders) {
+    if (!folders || folders.length === 0) {
+      const noSubfolderItem = document.createElement("li");
+      noSubfolderItem.textContent = "Aucun sous-dossier";
+      parentElement.appendChild(noSubfolderItem);
+      return;
+    }
+
     folders.forEach((folder) => {
       const listItem = document.createElement("li");
+      listItem.className = "folder-item";
+      listItem.dataset.folderId = folder.id;
+      listItem.dataset.loaded = "false";
+
+      const folderNameSpan = document.createElement("span");
+      folderNameSpan.className = "folder-name";
+      folderNameSpan.textContent = folder.name;
+
+      listItem.appendChild(folderNameSpan);
+      parentElement.appendChild(listItem);
 
       folderNameSpan.addEventListener("click", async (event) => {
-        // METTRE À JOUR L'ÉTAT
+        event.stopPropagation();
+        document
+          .querySelectorAll(".folder-item.selected")
+          .forEach((el) => el.classList.remove("selected"));
+        listItem.classList.add("selected");
+
         helpCodificationState.selectedFolderId = folder.id;
         console.log(
           "Dossier sélectionné :",
           helpCodificationState.selectedFolderId,
         );
 
-        // ... (logique de dépliement/chargement des sous-dossiers utilisant triconnectAPI.folder.getFolders(folder.id))
+        if (listItem.dataset.loaded === "true") {
+          const subList = listItem.querySelector("ul");
+          if (subList)
+            subList.style.display =
+              subList.style.display === "none" ? "block" : "none";
+          return;
+        }
+
+        const loadingSpan = document.createElement("span");
+        loadingSpan.textContent = " (chargement...)";
+        folderNameSpan.appendChild(loadingSpan);
+
+        try {
+          // Utilisation de l'API sensible aux permissions
+          const subFolders = await triconnectAPI.folder.getFolders(folder.id);
+          const subList = document.createElement("ul");
+          subList.className = "folder-tree";
+          listItem.appendChild(subList);
+          renderPermissionAwareFolderTree(subList, subFolders);
+          listItem.dataset.loaded = "true";
+        } catch (error) {
+          console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+        } finally {
+          folderNameSpan.removeChild(loadingSpan);
+        }
       });
     });
   }
