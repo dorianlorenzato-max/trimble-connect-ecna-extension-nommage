@@ -62,19 +62,15 @@ import {
     globalAccessToken =
       await triconnectAPI.extension.requestPermission("accesstoken");
     if (!globalAccessToken) throw new Error("L'Access Token est invalide.");
-    console.warn("Access Token récupéré au démarrage :", globalAccessToken);
 
     const projectInfo = await triconnectAPI.project.getCurrentProject();
     currentProjectId = projectInfo.id;
-
-    // Vérifier le rôle de l'utilisateur au démarrage
     const userRole = await fetchUserProjectRole(
       currentProjectId,
       globalAccessToken,
     );
     isAdmin = userRole === "ADMIN";
 
-    // Récupérer ou créer le dossier de configuration
     const projectRootId = await getProjectRootId(
       triconnectAPI,
       globalAccessToken,
@@ -85,18 +81,128 @@ import {
       globalAccessToken,
     );
     if (!configFolderId)
-      throw new Error(
-        `Le dossier "${CONFIG_FOLDER_NAME}" est introuvable ou n'a pas pu être créé.`,
-      );
+      throw new Error(`Dossier de configuration introuvable.`);
 
-    // Configuration du menu dans l'UI de Trimble Connect
     triconnectAPI.ui.setMenu({
       title: "ECNA Nommage Docs",
       icon: "https://dorianlorenzato-max.github.io/trimble-connect-ecna-extension/logoEiffage.png",
       command: "ecna_nommage_docs_clicked",
     });
 
-    // Attacher les événements aux nouveaux boutons principaux de la bannière
+    // Handler pour la page d'aide à la codification
+    const handleHelpNamingClick = async () => {
+      renderLoading(mainContentDiv);
+      try {
+        helpCodificationState = { file: null, selectedFolderId: null };
+        renderHelpCodificationPage(mainContentDiv);
+        attachHelpPageListeners();
+        const rootFolders = await triconnectAPI.folder.getFolders(); // Utilise le triconnectAPI de la portée supérieure
+        const treeRootElement = document.getElementById("folder-tree-root");
+        if (treeRootElement) {
+          treeRootElement.innerHTML = "";
+          renderPermissionAwareFolderTree(treeRootElement, rootFolders);
+        }
+      } catch (error) {
+        console.error("Erreur lors de l'affichage de la page d'aide :", error);
+        renderError(mainContentDiv, error);
+      }
+    };
+
+    // Handler pour la page de contrôle (inchangé, mais défini ici)
+    const handleControlNamingClick = async () => {
+      renderLoading(mainContentDiv);
+      try {
+        const [namingConfig, assignmentsConfig] = await Promise.all([
+          fetchConfigurationFile(
+            globalAccessToken,
+            configFolderId,
+            NAMING_CONFIG_FILENAME,
+          ),
+          fetchConfigurationFile(
+            globalAccessToken,
+            configFolderId,
+            NAMING_ASSIGNMENTS_FILENAME,
+          ),
+        ]);
+
+        const allRules = namingConfig ? namingConfig.rules : [];
+        const allAssignments = assignmentsConfig || {};
+
+        const documents = await fetchAllControlledDocuments(
+          triconnectAPI,
+          globalAccessToken,
+          allAssignments,
+          isAdmin,
+        );
+
+        // Traitement des données : regrouper les documents par convention
+        const documentsByConvention = {};
+        documents.forEach((doc) => {
+          if (!documentsByConvention[doc.conventionName]) {
+            documentsByConvention[doc.conventionName] = [];
+          }
+          documentsByConvention[doc.conventionName].push(doc);
+        });
+
+        renderControlPage(mainContentDiv, documentsByConvention, allRules);
+
+        document
+          .getElementById("export-pdf-btn")
+          .addEventListener("click", () =>
+            handleExportControlPDF(documentsByConvention, allRules),
+          );
+        document
+          .getElementById("export-excel-btn")
+          .addEventListener("click", () =>
+            handleExportControlExcel(documentsByConvention, allRules),
+          );
+      } catch (error) {
+        console.error(
+          "Erreur lors du chargement de la page de contrôle :",
+          error,
+        );
+        renderError(mainContentDiv, error);
+      }
+    };
+
+    // Handler pour la page de configuration (inchangé, mais défini ici)
+    const handleConfigNamingRuleClick = async () => {
+      console.log("Clic sur Configuration Nommage");
+      if (!isAdmin) {
+        alert(
+          "Accès refusé : Seuls les administrateurs peuvent configurer le nommage.",
+        );
+        renderHomePageWithButtons(mainContentDiv, isAdmin); // Revenir à la page d'accueil
+        return;
+      }
+      renderLoading(mainContentDiv);
+
+      try {
+        // Rendre la page de configuration générale
+        renderConfigPage(mainContentDiv, isAdmin);
+
+        // Attacher les gestionnaires d'événements aux boutons de la page de configuration
+        document
+          .getElementById("create-naming-btn")
+          .addEventListener("click", handleCreateNamingRuleClick);
+        document
+          .getElementById("manage-naming-btn")
+          .addEventListener("click", handleManageNamingRulesClick);
+        document
+          .getElementById("assign-naming-btn")
+          .addEventListener("click", handleAssignNamingRulesClick);
+
+        // Charger et rendre le tableau récapitulatif
+        await loadAndRenderNamingSummary();
+      } catch (error) {
+        console.error(
+          "Erreur lors de l'affichage de la page de configuration:",
+          error,
+        );
+        renderError(mainContentDiv, error);
+      }
+    };
+    // Attacher les événements aux boutons du BANDEAU
     document
       .getElementById("helpNamingBtn")
       .addEventListener("click", handleHelpNamingClick);
@@ -107,20 +213,8 @@ import {
       .getElementById("configNamingBtn")
       .addEventListener("click", handleConfigNamingRuleClick);
 
-    // Afficher la page d'accueil avec les boutons
+    // Afficher la page d'accueil et attacher les événements des boutons de la page
     renderHomePageWithButtons(mainContentDiv, isAdmin);
-    attachHomePageButtonEvents(); // Attacher les événements aux boutons de la page d'accueil
-  } catch (error) {
-    console.error(
-      "Erreur critique lors de l'initialisation de l'extension :",
-      error,
-    );
-    renderError(mainContentDiv, error);
-  }
-
-  // --- GESTIONNAIRES D'ÉVÉNEMENTS POUR LES NOUVEAUX BOUTONS ---
-
-  function attachHomePageButtonEvents() {
     document
       .getElementById("homeHelpNamingBtn")
       .addEventListener("click", handleHelpNamingClick);
@@ -130,28 +224,12 @@ import {
     document
       .getElementById("homeConfigNamingBtn")
       .addEventListener("click", handleConfigNamingRuleClick);
-  }
-
-  async function handleHelpNamingClick() {
-    renderLoading(mainContentDiv);
-    try {
-      // Réinitialiser l'état
-      helpCodificationState = { file: null, selectedFolderId: null };
-
-      renderHelpCodificationPage(mainContentDiv);
-      attachHelpPageListeners();
-
-      // Charger l'arborescence racine en utilisant l'API
-      const rootFolders = await triconnectAPI.folder.getFolders();
-      const treeRootElement = document.getElementById("folder-tree-root");
-      if (treeRootElement) {
-        treeRootElement.innerHTML = "";
-        renderPermissionAwareFolderTree(treeRootElement, rootFolders);
-      }
-    } catch (error) {
-      console.error("Erreur lors de l'affichage de la page d'aide :", error);
-      renderError(mainContentDiv, error);
-    }
+  } catch (error) {
+    console.error(
+      "Erreur critique lors de l'initialisation de l'extension :",
+      error,
+    );
+    renderError(mainContentDiv, error);
   }
 
   // FONCTION pour attacher les événements de la page d'aide
@@ -309,61 +387,7 @@ import {
         return { isValid: true }; // Type inconnu, on ne bloque pas
     }
   }
-  async function handleControlNamingClick() {
-    renderLoading(mainContentDiv);
-    try {
-      const [namingConfig, assignmentsConfig] = await Promise.all([
-        fetchConfigurationFile(
-          globalAccessToken,
-          configFolderId,
-          NAMING_CONFIG_FILENAME,
-        ),
-        fetchConfigurationFile(
-          globalAccessToken,
-          configFolderId,
-          NAMING_ASSIGNMENTS_FILENAME,
-        ),
-      ]);
-
-      const allRules = namingConfig ? namingConfig.rules : [];
-      const allAssignments = assignmentsConfig || {};
-
-      const documents = await fetchAllControlledDocuments(
-        triconnectAPI,
-        globalAccessToken,
-        allAssignments,
-        isAdmin,
-      );
-
-      // Traitement des données : regrouper les documents par convention
-      const documentsByConvention = {};
-      documents.forEach((doc) => {
-        if (!documentsByConvention[doc.conventionName]) {
-          documentsByConvention[doc.conventionName] = [];
-        }
-        documentsByConvention[doc.conventionName].push(doc);
-      });
-
-      renderControlPage(mainContentDiv, documentsByConvention, allRules);
-
-      document
-        .getElementById("export-pdf-btn")
-        .addEventListener("click", () =>
-          handleExportControlPDF(documentsByConvention, allRules),
-        );
-      document
-        .getElementById("export-excel-btn")
-        .addEventListener("click", () =>
-          handleExportControlExcel(documentsByConvention, allRules),
-        );
-    } catch (error) {
-      console.error(
-        "Erreur lors du chargement de la page de contrôle :",
-        error,
-      );
-      renderError(mainContentDiv, error);
-    }
-  }
+  // async function handleControlNamingClick() {
 
   // fonction d'export pdf
   async function handleExportControlPDF(documentsByConvention, allRules) {
@@ -476,42 +500,7 @@ import {
     link.click();
     document.body.removeChild(link);
   }
-  async function handleConfigNamingRuleClick() {
-    console.log("Clic sur Configuration Nommage");
-    if (!isAdmin) {
-      alert(
-        "Accès refusé : Seuls les administrateurs peuvent configurer le nommage.",
-      );
-      renderHomePageWithButtons(mainContentDiv, isAdmin); // Revenir à la page d'accueil
-      return;
-    }
-    renderLoading(mainContentDiv);
-
-    try {
-      // Rendre la page de configuration générale
-      renderConfigPage(mainContentDiv, isAdmin);
-
-      // Attacher les gestionnaires d'événements aux boutons de la page de configuration
-      document
-        .getElementById("create-naming-btn")
-        .addEventListener("click", handleCreateNamingRuleClick);
-      document
-        .getElementById("manage-naming-btn")
-        .addEventListener("click", handleManageNamingRulesClick);
-      document
-        .getElementById("assign-naming-btn")
-        .addEventListener("click", handleAssignNamingRulesClick);
-
-      // Charger et rendre le tableau récapitulatif
-      await loadAndRenderNamingSummary();
-    } catch (error) {
-      console.error(
-        "Erreur lors de l'affichage de la page de configuration:",
-        error,
-      );
-      renderError(mainContentDiv, error);
-    }
-  }
+  //async function handleConfigNamingRuleClick() {
 
   async function handleManageNamingRulesClick() {
     renderLoading(mainContentDiv);
