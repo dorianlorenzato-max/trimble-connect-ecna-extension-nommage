@@ -548,7 +548,15 @@ function renderControlPage(container, documentsByConvention, allRules) {
     return;
   }
 
-  let html = "<h1>Contrôle des Nommages</h1>";
+  let html = `
+    <div class="control-page-header">
+      <h1>Contrôle des Nommages</h1>
+      <div class="export-actions">
+        <button id="export-pdf-btn" class="button-secondary button-small">Exporter en PDF</button>
+        <button id="export-excel-btn" class="button-secondary button-small">Exporter en Excel</button>
+      </div>
+    </div>
+  `;
 
   for (const conventionName in documentsByConvention) {
     const conventionRules = allRules.find((r) => r.name === conventionName);
