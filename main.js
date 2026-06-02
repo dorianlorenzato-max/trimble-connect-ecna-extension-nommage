@@ -96,7 +96,13 @@ import {
         helpCodificationState = { file: null, selectedFolderId: null };
         renderHelpCodificationPage(mainContentDiv);
         attachHelpPageListeners();
-        const rootFolders = await triconnectAPI.folder.getFolders(); // Utilise le triconnectAPI de la portée supérieure
+
+        // Utilisation de notre fonction fiable qui utilise l'API REST
+        const rootFolders = await getRootFolders(
+          triconnectAPI,
+          globalAccessToken,
+        );
+
         const treeRootElement = document.getElementById("folder-tree-root");
         if (treeRootElement) {
           treeRootElement.innerHTML = "";
@@ -273,64 +279,58 @@ import {
   //  FONCTION pour gérer l'arborescence avec permissions
   function renderPermissionAwareFolderTree(parentElement, folders) {
     if (!folders || folders.length === 0) {
-      const noSubfolderItem = document.createElement("li");
-      noSubfolderItem.textContent = "Aucun sous-dossier";
-      parentElement.appendChild(noSubfolderItem);
-      return;
+        const noSubfolderItem = document.createElement("li");
+        noSubfolderItem.textContent = "Aucun sous-dossier";
+        parentElement.appendChild(noSubfolderItem);
+        return;
     }
 
-    folders.forEach((folder) => {
-      const listItem = document.createElement("li");
-      listItem.className = "folder-item";
-      listItem.dataset.folderId = folder.id;
-      listItem.dataset.loaded = "false";
+    folders.forEach(folder => {
+        const listItem = document.createElement("li");
+        listItem.className = "folder-item";
+        listItem.dataset.folderId = folder.id;
+        listItem.dataset.loaded = "false";
 
-      const folderNameSpan = document.createElement("span");
-      folderNameSpan.className = "folder-name";
-      folderNameSpan.textContent = folder.name;
+        const folderNameSpan = document.createElement("span");
+        folderNameSpan.className = "folder-name";
+        folderNameSpan.textContent = folder.name;
 
-      listItem.appendChild(folderNameSpan);
-      parentElement.appendChild(listItem);
+        listItem.appendChild(folderNameSpan);
+        parentElement.appendChild(listItem);
 
-      folderNameSpan.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        document
-          .querySelectorAll(".folder-item.selected")
-          .forEach((el) => el.classList.remove("selected"));
-        listItem.classList.add("selected");
+        folderNameSpan.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            document.querySelectorAll(".folder-item.selected").forEach(el => el.classList.remove("selected"));
+            listItem.classList.add("selected");
 
-        helpCodificationState.selectedFolderId = folder.id;
-        console.log(
-          "Dossier sélectionné :",
-          helpCodificationState.selectedFolderId,
-        );
+            helpCodificationState.selectedFolderId = folder.id;
+            console.log("Dossier sélectionné :", helpCodificationState.selectedFolderId);
+            
+            if (listItem.dataset.loaded === "true") {
+                const subList = listItem.querySelector("ul");
+                if (subList) subList.style.display = subList.style.display === "none" ? "block" : "none";
+                return;
+            }
 
-        if (listItem.dataset.loaded === "true") {
-          const subList = listItem.querySelector("ul");
-          if (subList)
-            subList.style.display =
-              subList.style.display === "none" ? "block" : "none";
-          return;
-        }
+            const loadingSpan = document.createElement("span");
+            loadingSpan.textContent = " (chargement...)";
+            folderNameSpan.appendChild(loadingSpan);
 
-        const loadingSpan = document.createElement("span");
-        loadingSpan.textContent = " (chargement...)";
-        folderNameSpan.appendChild(loadingSpan);
-
-        try {
-          // Utilisation de l'API sensible aux permissions
-          const subFolders = await triconnectAPI.folder.getFolders(folder.id);
-          const subList = document.createElement("ul");
-          subList.className = "folder-tree";
-          listItem.appendChild(subList);
-          renderPermissionAwareFolderTree(subList, subFolders);
-          listItem.dataset.loaded = "true";
-        } catch (error) {
-          console.error(`Erreur au chargement du dossier ${folder.id}`, error);
-        } finally {
-          folderNameSpan.removeChild(loadingSpan);
-        }
-      });
+            try {
+                // On utilise notre fonction fetchFolderContents qui a prouvé sa fiabilité
+                const subFolders = await fetchFolderContents(folder.id, globalAccessToken);
+                
+                const subList = document.createElement("ul");
+                subList.className = "folder-tree";
+                listItem.appendChild(subList);
+                renderPermissionAwareFolderTree(subList, subFolders);
+                listItem.dataset.loaded = "true";
+            } catch (error) {
+                console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+            } finally {
+                folderNameSpan.removeChild(loadingSpan);
+            }
+        });
     });
   }
 
