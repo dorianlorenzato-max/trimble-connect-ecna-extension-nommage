@@ -548,3 +548,43 @@ body {
   display: flex;
   gap: 10px;
 }
+
+/* === PAGE D'AIDE À LA CODIFICATION === */
+.help-page-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 10px;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  cursor: pointer;
+  background-color: #fafafa;
+  transition: background-color 0.2s;
+}
+
+.drop-zone.drag-over {
+  background-color: #e0e0e0;
+  border-color: #005a70;
+}
+
+#naming-zone-container {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+}
+
+.final-action-container {
+  text-align: right;
+  margin-top: 20px;
+}
