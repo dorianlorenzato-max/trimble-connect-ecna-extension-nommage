@@ -630,6 +630,35 @@ function renderNamingControlTable(documents, conventionRules) {
   `;
 }
 
+// fonction d'aide à la codification
+function renderHelpCodificationPage(container) {
+  container.innerHTML = `
+    <h1>Aide à la Codification</h1>
+    <p>Déposez votre document et sélectionnez un dossier de destination pour commencer.</p>
+    <div class="help-page-layout">
+      <!-- Zone de dépôt de fichier -->
+      <div id="file-drop-zone" class="drop-zone">
+        <span id="drop-zone-text">Glissez-déposez un fichier ici ou cliquez pour en sélectionner un.</span>
+        <input type="file" id="file-upload-input" style="display: none;">
+      </div>
+
+      <!-- Arborescence des dossiers -->
+      <div class="folder-browser-container">
+        <ul id="folder-tree-root" class="folder-tree">
+          <li>Chargement des dossiers...</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Zone de nommage (initialement vide) -->
+    <div id="naming-zone-container"></div>
+    
+    <!-- Bouton final (initialement désactivé) -->
+    <div class="final-action-container">
+        <button id="upload-document-btn" class="button-primary" disabled>Déposer le document</button>
+    </div>
+  `;
+}
 // Exporter toutes les fonctions
 export {
   renderLoading,
@@ -646,4 +675,5 @@ export {
   renderAssignNamingPage,
   updateAssignmentPanel,
   renderControlPage,
+  renderHelpCodificationPage,
 };
