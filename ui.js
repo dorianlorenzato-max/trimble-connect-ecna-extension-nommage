@@ -659,6 +659,46 @@ function renderHelpCodificationPage(container) {
     </div>
   `;
 }
+
+function renderNamingZone(container, convention) {
+  const fieldsHtml = convention.columns
+    .map((col, index) => {
+      let inputHtml = "";
+
+      // Génère le bon type d'input en fonction de la règle
+      if (col.type === "list" && col.values.length > 0) {
+        const options = col.values
+          .map(
+            (v) =>
+              `<option value="${v.value}" title="${v.description}">${v.value} - ${v.description}</option>`,
+          )
+          .join("");
+        inputHtml = `<select class="naming-input" data-index="${index}">${options}</select>`;
+      } else {
+        // Pour tous les autres types, un simple champ de texte
+        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${col.name}">`;
+      }
+
+      // Ajoute un séparateur (sauf pour le dernier)
+      const separator =
+        index < convention.columns.length - 1
+          ? '<span class="separator">-</span>'
+          : "";
+
+      return `<div class="naming-field">${inputHtml}${separator}</div>`;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <h3>Construisez le nom de votre document :</h3>
+    <div class="naming-zone">
+      ${fieldsHtml}
+    </div>
+    <div class="naming-preview">
+      <strong>Aperçu : </strong><span id="final-name-preview"></span>
+    </div>
+  `;
+}
 // Exporter toutes les fonctions
 export {
   renderLoading,
@@ -676,4 +716,5 @@ export {
   updateAssignmentPanel,
   renderControlPage,
   renderHelpCodificationPage,
+  renderNamingZone,
 };
