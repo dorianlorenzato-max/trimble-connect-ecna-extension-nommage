@@ -407,48 +407,34 @@ import {
     );
     const uploadBtn = document.getElementById("upload-document-btn");
 
-    if (!file || !selectedFolderId) {
-      return; // On ne fait rien si l'une des deux conditions n'est pas remplie
-    }
+    if (!file || !selectedFolderId) return;
 
     try {
-      namingZoneContainer.innerHTML =
-        "<p>Recherche de la convention de nommage...</p>";
-
-      const assignmentsConfig = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_ASSIGNMENTS_FILENAME,
-      );
+      namingZoneContainer.innerHTML = "<p>Recherche de la convention...</p>";
+      const assignmentsConfig = await fetchConfigurationFile(/*...*/);
       const conventionName = assignmentsConfig
         ? assignmentsConfig[selectedFolderId]
         : null;
 
       if (!conventionName) {
-        namingZoneContainer.innerHTML =
-          '<p style="font-style: italic;">Pas de nommage spécifique attendu pour ce dossier.</p>';
-        uploadBtn.disabled = false; // L'utilisateur peut déposer avec le nom original
+        namingZoneContainer.innerHTML = "<p>...</p>";
+        uploadBtn.disabled = false;
+        // On attache l'événement pour l'upload avec le nom original
+        uploadBtn.addEventListener("click", () => handleFinalUpload(null));
         return;
       }
 
-      const namingConfig = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_CONFIG_FILENAME,
-      );
+      const namingConfig = await fetchConfigurationFile(/*...*/);
       const convention = namingConfig.rules.find(
         (r) => r.name === conventionName,
       );
+      if (!convention) throw new Error(/*...*/);
 
-      if (!convention) {
-        throw new Error(
-          `Convention de nommage "${conventionName}" introuvable.`,
-        );
-      }
-
-      // La convention est trouvée, on affiche la zone de nommage
       renderNamingZone(namingZoneContainer, convention);
-      uploadBtn.disabled = false; // On active le bouton de dépôt
+      attachNamingZoneListeners(convention); // <== NOUVEAU : On attache les listeners
+      uploadBtn.disabled = false;
+      // On attache l'événement pour l'upload avec la convention
+      uploadBtn.addEventListener("click", () => handleFinalUpload(convention));
     } catch (error) {
       console.error(
         "Erreur lors de l'affichage de la zone de nommage :",
@@ -456,6 +442,85 @@ import {
       );
       namingZoneContainer.innerHTML = `<p style="color: red;">${error.message}</p>`;
       uploadBtn.disabled = true;
+    }
+  }
+  //fonction pour déposer le document renommé
+  function attachNamingZoneListeners(convention) {
+    const inputs = document.querySelectorAll(".naming-input");
+    inputs.forEach((input) => {
+      input.addEventListener("input", () =>
+        updateNamingPreviewAndValidate(convention),
+      );
+    });
+    updateNamingPreviewAndValidate(convention); // Premier appel pour l'état initial
+  }
+
+  function updateNamingPreviewAndValidate(convention) {
+    const previewSpan = document.getElementById("final-name-preview");
+    const uploadBtn = document.getElementById("upload-document-btn");
+    let finalNameParts = [];
+    let isFormValid = true;
+
+    convention.columns.forEach((colRule, index) => {
+      const input = document.querySelector(
+        `.naming-input[data-index="${index}"]`,
+      );
+      let value = input.value;
+
+      // Validation en temps réel
+      const validationResult = validatePart(value, colRule);
+      if (validationResult.isValid) {
+        input.classList.remove("invalid-input");
+      } else {
+        input.classList.add("invalid-input");
+        isFormValid = false; // Le formulaire est invalide si au moins un champ l'est
+      }
+      finalNameParts.push(value);
+    });
+
+    const fileExtension = helpCodificationState.file.name.split(".").pop();
+    previewSpan.textContent = `${finalNameParts.join("-")}.${fileExtension}`;
+    uploadBtn.disabled = !isFormValid; // Le bouton est désactivé si le formulaire est invalide
+  }
+
+  //  FONCTION pour l'upload final
+  async function handleFinalUpload(convention) {
+    const { file, selectedFolderId } = helpCodificationState;
+    if (!file || !selectedFolderId) {
+      alert("Veuillez sélectionner un fichier et un dossier de destination.");
+      return;
+    }
+
+    let finalFileName = file.name;
+
+    // Si une convention est fournie, on construit le nom final
+    if (convention) {
+      const finalNamePreview =
+        document.getElementById("final-name-preview").textContent;
+      if (!finalNamePreview) {
+        alert("Impossible de construire le nom final du fichier.");
+        return;
+      }
+      finalFileName = finalNamePreview;
+    }
+
+    renderSaving(mainContentDiv);
+
+    try {
+      // Utilisation de l'API Trimble pour uploader le fichier
+      const result = await triconnectAPI.file.uploadFile(
+        selectedFolderId,
+        new File([file], finalFileName, { type: file.type }), // On recrée un fichier avec le nouveau nom
+      );
+
+      renderSuccess(
+        mainContentDiv,
+        `Le fichier "${finalFileName}" a été déposé avec succès !`,
+      );
+      setTimeout(handleHelpNamingClick, 2000); // Revenir à la page d'aide
+    } catch (error) {
+      console.error("Erreur lors du dépôt du fichier :", error);
+      renderError(mainContentDiv, error);
     }
   }
   // fonction d'export pdf
