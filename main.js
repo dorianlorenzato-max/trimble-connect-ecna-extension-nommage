@@ -5,11 +5,9 @@ import {
   fetchFolderContents,
   fetchLoggedInUserDetails,
   getRootFolders,
-  getConfigFolderId,
   findOrCreateFolder,
   getProjectRootId,
   fetchUserProjectRole,
-  fetchProjectGroups,
   fetchAllProjectFolders,
   recursivelyFetchAllSubfolders,
   fetchAllControlledDocuments,
@@ -35,37 +33,36 @@ import {
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
 (async function () {
   const mainContentDiv = document.getElementById("mainContent");
-  const CONFIG_FOLDER_NAME = "Configuration_Nommage"; // Nouveau nom de dossier de configuration
-  const NAMING_CONFIG_FILENAME = "naming-rules-config.json"; // Nom du fichier de configuration des règles de nommage
-  const NAMING_ASSIGNMENTS_FILENAME = "naming-assignments.json"; // Nom du fichier d'affectation des nommages
+  const CONFIG_FOLDER_NAME = "Configuration_Nommage";
+  const NAMING_CONFIG_FILENAME = "naming-rules-config.json";
+  const NAMING_ASSIGNMENTS_FILENAME = "naming-assignments.json";
 
   let triconnectAPI;
   let globalAccessToken = null;
   let configFolderId = null;
   let currentProjectId = null;
-  let isAdmin = false; // Variable pour stocker le statut administrateur
-  let currentRuleState = null; //  notre variable d'état pour la gestions de colonnes de convention de nommage
+  let isAdmin = false;
+  let currentRuleState = null;
   let originalRuleNameToEdit = null;
-  let helpCodificationState = {
-    file: null,
-    selectedFolderId: null,
-  };
+  let helpCodificationState = { file: null, selectedFolderId: null };
 
-  // --- INITIALISATION DE L'EXTENSION ---
+  // ==================================================================
+  // == SÉQUENCE D'INITIALISATION (UNE SEULE FOIS AU DÉMARRAGE)      ==
+  // ==================================================================
   try {
     renderLoading(mainContentDiv);
     triconnectAPI = await TrimbleConnectWorkspace.connect(
       window.parent,
-      (event, data) => {},
+      () => {},
       30000,
     );
-
     globalAccessToken =
       await triconnectAPI.extension.requestPermission("accesstoken");
     if (!globalAccessToken) throw new Error("L'Access Token est invalide.");
 
     const projectInfo = await triconnectAPI.project.getCurrentProject();
     currentProjectId = projectInfo.id;
+
     const userRole = await fetchUserProjectRole(
       currentProjectId,
       globalAccessToken,
@@ -82,7 +79,9 @@ import {
       globalAccessToken,
     );
     if (!configFolderId)
-      throw new Error(`Dossier de configuration introuvable.`);
+      throw new Error(
+        "Dossier de configuration introuvable ou impossible à créer.",
+      );
 
     triconnectAPI.ui.setMenu({
       title: "ECNA Nommage Docs",
@@ -90,199 +89,508 @@ import {
       command: "ecna_nommage_docs_clicked",
     });
 
-    // Fonction pour la page de contrôle (inchangé, mais défini ici)
-    async function handleControlNamingClick() {
-      renderLoading(mainContentDiv);
-      try {
-        const [namingConfig, assignmentsConfig] = await Promise.all([
-          fetchConfigurationFile(
-            globalAccessToken,
-            configFolderId,
-            NAMING_CONFIG_FILENAME,
-          ),
-          fetchConfigurationFile(
-            globalAccessToken,
-            configFolderId,
-            NAMING_ASSIGNMENTS_FILENAME,
-          ),
-        ]);
+    // Attacher les événements aux boutons du BANDEAU
+    document
+      .getElementById("helpNamingBtn")
+      .addEventListener("click", handleHelpNamingClick);
+    document
+      .getElementById("controlNamingBtn")
+      .addEventListener("click", handleControlNamingClick);
+    document
+      .getElementById("configNamingBtn")
+      .addEventListener("click", handleConfigNamingRuleClick);
 
-        const allRules = namingConfig ? namingConfig.rules : [];
-        const allAssignments = assignmentsConfig || {};
+    // Afficher la page d'accueil et attacher les événements des boutons de la page
+    renderHomePageWithButtons(mainContentDiv, isAdmin);
+    document
+      .getElementById("homeHelpNamingBtn")
+      .addEventListener("click", handleHelpNamingClick);
+    document
+      .getElementById("homeControlNamingBtn")
+      .addEventListener("click", handleControlNamingClick);
+    document
+      .getElementById("homeConfigNamingBtn")
+      .addEventListener("click", handleConfigNamingRuleClick);
+  } catch (error) {
+    console.error(
+      "Erreur critique lors de l'initialisation de l'extension :",
+      error,
+    );
+    renderError(mainContentDiv, error);
+  }
 
-        const documents = await fetchAllControlledDocuments(
-          triconnectAPI,
-          globalAccessToken,
-          allAssignments,
-          isAdmin,
-        );
+  // ==================================================================
+  // == DÉFINITION DE TOUTES LES FONCTIONS DE L'APPLICATION         ==
+  // ==================================================================
 
-        // Traitement des données : regrouper les documents par convention
-        const documentsByConvention = {};
-        documents.forEach((doc) => {
-          if (!documentsByConvention[doc.conventionName]) {
-            documentsByConvention[doc.conventionName] = [];
-          }
-          documentsByConvention[doc.conventionName].push(doc);
-        });
+  // --- Handlers principaux (appelés par les boutons) ---
 
-        renderControlPage(mainContentDiv, documentsByConvention, allRules);
-
-        document
-          .getElementById("export-pdf-btn")
-          .addEventListener("click", () =>
-            handleExportControlPDF(documentsByConvention, allRules),
-          );
-        document
-          .getElementById("export-excel-btn")
-          .addEventListener("click", () =>
-            handleExportControlExcel(documentsByConvention, allRules),
-          );
-      } catch (error) {
-        console.error(
-          "Erreur lors du chargement de la page de contrôle :",
-          error,
-        );
-        renderError(mainContentDiv, error);
-      }
-    }
-
-    // fonction pour la page d'aide à la codification
-    async function handleHelpNamingClick() {
-      renderLoading(mainContentDiv);
-      try {
-        helpCodificationState = { file: null, selectedFolderId: null };
-        renderHelpCodificationPage(mainContentDiv);
-        attachHelpPageListeners();
-
-        // Utilisation de notre fonction fiable qui utilise l'API REST
-        const rootFolders = await getRootFolders(
-          triconnectAPI,
-          globalAccessToken,
-        );
-
-        const treeRootElement = document.getElementById("folder-tree-root");
-        if (treeRootElement) {
-          treeRootElement.innerHTML = "";
-          renderPermissionAwareFolderTree(treeRootElement, rootFolders);
-        }
-      } catch (error) {
-        console.error("Erreur lors de l'affichage de la page d'aide :", error);
-        renderError(mainContentDiv, error);
-      }
-    }
-
-    // FONCTION pour attacher les événements de la page d'aide
-    function attachHelpPageListeners() {
-      const dropZone = document.getElementById("file-drop-zone");
-      const fileInput = document.getElementById("file-upload-input");
-
-      // Logique pour le bouton "Ajouter document"
-      dropZone.addEventListener("click", () => fileInput.click());
-      fileInput.addEventListener("change", (e) => {
-        if (e.target.files.length > 0) {
-          handleFileSelected(e.target.files[0]);
-        }
-      });
-
-      // Logique pour le cliquer-glisser
-      dropZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropZone.classList.add("drag-over");
-      });
-      dropZone.addEventListener("dragleave", () =>
-        dropZone.classList.remove("drag-over"),
+  async function handleHelpNamingClick() {
+    renderLoading(mainContentDiv);
+    try {
+      helpCodificationState = { file: null, selectedFolderId: null };
+      renderHelpCodificationPage(mainContentDiv);
+      attachHelpPageListeners();
+      const rootFolders = await getRootFolders(
+        triconnectAPI,
+        globalAccessToken,
       );
-      dropZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("drag-over");
-        if (e.dataTransfer.files.length > 0) {
-          handleFileSelected(e.dataTransfer.files[0]);
+      const treeRootElement = document.getElementById("folder-tree-root");
+      if (treeRootElement) {
+        treeRootElement.innerHTML = "";
+        renderPermissionAwareFolderTree(treeRootElement, rootFolders);
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'affichage de la page d'aide :", error);
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  async function handleControlNamingClick() {
+    renderLoading(mainContentDiv);
+    try {
+      const [namingConfig, assignmentsConfig] = await Promise.all([
+        fetchConfigurationFile(
+          globalAccessToken,
+          configFolderId,
+          NAMING_CONFIG_FILENAME,
+        ),
+        fetchConfigurationFile(
+          globalAccessToken,
+          configFolderId,
+          NAMING_ASSIGNMENTS_FILENAME,
+        ),
+      ]);
+      const allRules = namingConfig ? namingConfig.rules : [];
+      const allAssignments = assignmentsConfig || {};
+      const documents = await fetchAllControlledDocuments(
+        triconnectAPI,
+        globalAccessToken,
+        allAssignments,
+        isAdmin,
+      );
+      const documentsByConvention = {};
+      documents.forEach((doc) => {
+        if (!documentsByConvention[doc.conventionName]) {
+          documentsByConvention[doc.conventionName] = [];
+        }
+        documentsByConvention[doc.conventionName].push(doc);
+      });
+      renderControlPage(mainContentDiv, documentsByConvention, allRules);
+      document
+        .getElementById("export-pdf-btn")
+        .addEventListener("click", () =>
+          handleExportControlPDF(documentsByConvention, allRules),
+        );
+      document
+        .getElementById("export-excel-btn")
+        .addEventListener("click", () =>
+          handleExportControlExcel(documentsByConvention, allRules),
+        );
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement de la page de contrôle :",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  async function handleConfigNamingRuleClick() {
+    if (!isAdmin) {
+      alert(
+        "Accès refusé : Seuls les administrateurs peuvent configurer le nommage.",
+      );
+      return;
+    }
+    renderLoading(mainContentDiv);
+    try {
+      renderConfigPage(mainContentDiv, isAdmin);
+      document
+        .getElementById("create-naming-btn")
+        .addEventListener("click", handleCreateNamingRuleClick);
+      document
+        .getElementById("manage-naming-btn")
+        .addEventListener("click", handleManageNamingRulesClick);
+      document
+        .getElementById("assign-naming-btn")
+        .addEventListener("click", handleAssignNamingRulesClick);
+      await loadAndRenderNamingSummary();
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'affichage de la page de configuration:",
+        error,
+      );
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  // --- Fonctions de la section "Aide Codification" ---
+
+  function attachHelpPageListeners() {
+    const dropZone = document.getElementById("file-drop-zone");
+    const fileInput = document.getElementById("file-upload-input");
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) handleFileSelected(e.target.files[0]);
+    });
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", () =>
+      dropZone.classList.remove("drag-over"),
+    );
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      if (e.dataTransfer.files.length > 0)
+        handleFileSelected(e.dataTransfer.files[0]);
+    });
+  }
+
+  function handleFileSelected(file) {
+    helpCodificationState.file = file;
+    document.getElementById("drop-zone-text").textContent =
+      `Fichier sélectionné : ${file.name}`;
+    checkStateAndRenderNamingZone();
+  }
+
+  function renderPermissionAwareFolderTree(parentElement, folders) {
+    if (!folders || folders.length === 0) {
+      /* ... (inchangé) */ return;
+    }
+    folders.forEach((folder) => {
+      const listItem = document.createElement("li");
+      listItem.className = "folder-item";
+      listItem.dataset.folderId = folder.id;
+      listItem.dataset.loaded = "false";
+      const folderNameSpan = document.createElement("span");
+      folderNameSpan.className = "folder-name";
+      folderNameSpan.textContent = folder.name;
+      listItem.appendChild(folderNameSpan);
+      parentElement.appendChild(listItem);
+      folderNameSpan.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        document
+          .querySelectorAll(".folder-item.selected")
+          .forEach((el) => el.classList.remove("selected"));
+        listItem.classList.add("selected");
+        helpCodificationState.selectedFolderId = folder.id;
+        checkStateAndRenderNamingZone();
+        if (listItem.dataset.loaded === "true") {
+          const subList = listItem.querySelector("ul");
+          if (subList)
+            subList.style.display =
+              subList.style.display === "none" ? "block" : "none";
+          return;
+        }
+        const loadingSpan = document.createElement("span");
+        loadingSpan.textContent = " (chargement...)";
+        folderNameSpan.appendChild(loadingSpan);
+        try {
+          const subFolders = await fetchFolderContents(
+            folder.id,
+            globalAccessToken,
+          );
+          const subList = document.createElement("ul");
+          subList.className = "folder-tree";
+          listItem.appendChild(subList);
+          renderPermissionAwareFolderTree(subList, subFolders);
+          listItem.dataset.loaded = "true";
+        } catch (error) {
+          console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+        } finally {
+          folderNameSpan.removeChild(loadingSpan);
         }
       });
-    }
+    });
+  }
 
-    //  FONCTION pour gérer le fichier sélectionné
-    function handleFileSelected(file) {
-      helpCodificationState.file = file;
-      const dropZoneText = document.getElementById("drop-zone-text");
-      dropZoneText.textContent = `Fichier sélectionné : ${file.name}`;
-      console.log("Fichier prêt :", helpCodificationState.file);
-      checkStateAndRenderNamingZone();
-    }
+  async function checkStateAndRenderNamingZone() {
+    const { file, selectedFolderId } = helpCodificationState;
+    const namingZoneContainer = document.getElementById(
+      "naming-zone-container",
+    );
+    const uploadBtn = document.getElementById("upload-document-btn");
+    if (!file || !selectedFolderId) return;
 
-    //  FONCTION pour gérer l'arborescence avec permissions
-    function renderPermissionAwareFolderTree(parentElement, folders) {
-      if (!folders || folders.length === 0) {
-        const noSubfolderItem = document.createElement("li");
-        noSubfolderItem.textContent = "Aucun sous-dossier";
-        parentElement.appendChild(noSubfolderItem);
+    try {
+      namingZoneContainer.innerHTML = "<p>Recherche de la convention...</p>";
+      const assignmentsConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_ASSIGNMENTS_FILENAME,
+      );
+      const conventionName = assignmentsConfig
+        ? assignmentsConfig[selectedFolderId]
+        : null;
+
+      uploadBtn.onclick = null; // Important: réinitialiser l'événement précédent
+
+      if (!conventionName) {
+        namingZoneContainer.innerHTML =
+          '<p style="font-style: italic;">Pas de nommage spécifique attendu pour ce dossier.</p>';
+        uploadBtn.disabled = false;
+        uploadBtn.addEventListener("click", () => handleFinalUpload(null));
         return;
       }
 
-      folders.forEach((folder) => {
-        const listItem = document.createElement("li");
-        listItem.className = "folder-item";
-        listItem.dataset.folderId = folder.id;
-        listItem.dataset.loaded = "false";
+      const namingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const convention = namingConfig.rules.find(
+        (r) => r.name === conventionName,
+      );
+      if (!convention)
+        throw new Error(`Convention "${conventionName}" introuvable.`);
 
-        const folderNameSpan = document.createElement("span");
-        folderNameSpan.className = "folder-name";
-        folderNameSpan.textContent = folder.name;
+      renderNamingZone(namingZoneContainer, convention);
+      attachNamingZoneListeners(convention);
+      uploadBtn.disabled = false;
+      uploadBtn.addEventListener("click", () => handleFinalUpload(convention));
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'affichage de la zone de nommage :",
+        error,
+      );
+      namingZoneContainer.innerHTML = `<p style="color: red;">${error.message}</p>`;
+      uploadBtn.disabled = true;
+    }
+  }
 
-        listItem.appendChild(folderNameSpan);
-        parentElement.appendChild(listItem);
+  function attachNamingZoneListeners(convention) {
+    document.querySelectorAll(".naming-input").forEach((input) => {
+      input.addEventListener("input", () =>
+        updateNamingPreviewAndValidate(convention),
+      );
+    });
+    updateNamingPreviewAndValidate(convention);
+  }
 
-        folderNameSpan.addEventListener("click", async (event) => {
-          event.stopPropagation();
-          document
-            .querySelectorAll(".folder-item.selected")
-            .forEach((el) => el.classList.remove("selected"));
-          listItem.classList.add("selected");
+  function updateNamingPreviewAndValidate(convention) {
+    const previewSpan = document.getElementById("final-name-preview");
+    const uploadBtn = document.getElementById("upload-document-btn");
+    let finalNameParts = [];
+    let isFormValid = true;
+    convention.columns.forEach((colRule, index) => {
+      const input = document.querySelector(
+        `.naming-input[data-index="${index}"]`,
+      );
+      let value = input.value;
+      if (colRule.type === "trigram") value = value.toUpperCase();
+      const validationResult = validatePart(value, colRule);
+      input.classList.toggle("invalid-input", !validationResult.isValid);
+      if (!validationResult.isValid) isFormValid = false;
+      finalNameParts.push(value);
+    });
+    const fileExtension = helpCodificationState.file.name.split(".").pop();
+    previewSpan.textContent = `${finalNameParts.join("-")}.${fileExtension}`;
+    uploadBtn.disabled = !isFormValid;
+  }
 
-          helpCodificationState.selectedFolderId = folder.id;
-          console.log(
-            "Dossier sélectionné :",
-            helpCodificationState.selectedFolderId,
-          );
-          checkStateAndRenderNamingZone();
-          if (listItem.dataset.loaded === "true") {
-            const subList = listItem.querySelector("ul");
-            if (subList)
-              subList.style.display =
-                subList.style.display === "none" ? "block" : "none";
-            return;
+  async function handleFinalUpload(convention) {
+    const { file, selectedFolderId } = helpCodificationState;
+    if (!file || !selectedFolderId) {
+      alert("Veuillez sélectionner un fichier et un dossier.");
+      return;
+    }
+    let finalFileName = file.name;
+    if (convention) {
+      const finalNamePreview =
+        document.getElementById("final-name-preview").textContent;
+      if (!finalNamePreview || document.querySelector(".invalid-input")) {
+        alert("Le nom du fichier n'est pas valide.");
+        return;
+      }
+      finalFileName = finalNamePreview;
+    }
+    renderSaving(mainContentDiv);
+    try {
+      await triconnectAPI.file.uploadFile(
+        selectedFolderId,
+        new File([file], finalFileName, { type: file.type }),
+      );
+      renderSuccess(
+        mainContentDiv,
+        `Le fichier "${finalFileName}" a été déposé avec succès !`,
+      );
+      setTimeout(handleHelpNamingClick, 2000);
+    } catch (error) {
+      console.error("Erreur lors du dépôt du fichier :", error);
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  // --- Fonctions de la section "Configuration" ---
+  // Fonction pour charger et rendre le tableau récapitulatif des codifications
+  async function loadAndRenderNamingSummary() {
+    const summaryContainer = document.getElementById(
+      "naming-config-summary-container",
+    );
+    if (!summaryContainer) return; // S'assurer que le conteneur existe
+
+    summaryContainer.innerHTML = `<p style="text-align:center; margin-top:20px;">Chargement du récapitulatif des codifications...</p>`;
+
+    try {
+      // Pour l'instant, on va simuler des données car la logique de sauvegarde n'est pas encore implémentée
+      const namingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const assignmentsConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_ASSIGNMENTS_FILENAME,
+      );
+      const allProjectFolders = await fetchAllProjectFolders(
+        triconnectAPI,
+        globalAccessToken,
+      );
+
+      const folderIdToNameMap = new Map(
+        allProjectFolders.map((f) => [f.id, f.name]),
+      );
+
+      const allNamingRules = namingConfig?.rules || [];
+      const allAssignments = assignmentsConfig || {};
+      const assignmentsByRule = {};
+
+      for (const folderId in allAssignments) {
+        const ruleName = allAssignments[folderId];
+        if (ruleName) {
+          if (!assignmentsByRule[ruleName]) {
+            assignmentsByRule[ruleName] = [];
           }
-
-          const loadingSpan = document.createElement("span");
-          loadingSpan.textContent = " (chargement...)";
-          folderNameSpan.appendChild(loadingSpan);
-
-          try {
-            // On utilise notre fonction fetchFolderContents qui a prouvé sa fiabilité
-            const subFolders = await fetchFolderContents(
-              folder.id,
-              globalAccessToken,
-            );
-
-            const subList = document.createElement("ul");
-            subList.className = "folder-tree";
-            listItem.appendChild(subList);
-            renderPermissionAwareFolderTree(subList, subFolders);
-            listItem.dataset.loaded = "true";
-          } catch (error) {
-            console.error(
-              `Erreur au chargement du dossier ${folder.id}`,
-              error,
-            );
-          } finally {
-            folderNameSpan.removeChild(loadingSpan);
+          const folderName = folderIdToNameMap.get(folderId);
+          if (folderName) {
+            assignmentsByRule[ruleName].push(folderName);
           }
-        });
-      });
+        }
+      }
+
+      const summaryData = allNamingRules.map((rule) => ({
+        ruleName: rule.name,
+        affectedFolders: assignmentsByRule[rule.name] || [],
+        date: rule.modifiedAt || rule.createdAt || "N/A",
+        creator: rule.modifiedBy || rule.createdBy || "N/A",
+      }));
+
+      renderNamingConfigSummaryTable(summaryContainer, summaryData);
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement du résumé des codifications :",
+        error,
+      );
+      summaryContainer.innerHTML = `<p style="color: red; text-align:center; margin-top:20px;">Erreur lors du chargement des données : ${error.message}</p>`;
+      renderError(mainContentDiv, error); // Affiche aussi l'erreur principale
+    }
+  }
+  // FONCTION pour gerer les boutons de création de convention de nommage
+  async function handleCreateNamingRuleClick() {
+    originalRuleNameToEdit = null; // Assure qu'on est bien en mode création
+    // Initialise l'état pour une nouvelle règle
+    currentRuleState = {
+      name: "",
+      columns: [],
+      editMode: "normal",
+    };
+
+    // Premier affichage de la page
+    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    attachCreatePageListeners();
+  }
+  // fonction pour enregistrer la convention de nommage
+  async function handleSaveNamingRuleClick() {
+    // 1. Mettre à jour l'état avec la dernière valeur de l'input
+    currentRuleState.name = document
+      .getElementById("naming-rule-name")
+      .value.trim();
+
+    if (!currentRuleState.name) {
+      alert("Veuillez donner un nom à la codification.");
+      return;
     }
 
-    function validatePart(value, rule) {
+    renderSaving(mainContentDiv);
+
+    try {
+      const loggedInUser = await fetchLoggedInUserDetails(globalAccessToken);
+      const userName =
+        `${loggedInUser.firstName} ${loggedInUser.lastName}`.trim();
+      const today = new Date().toISOString().split("T")[0];
+
+      const existingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const finalConfigurationData = existingConfig || { rules: [] };
+
+      if (originalRuleNameToEdit) {
+        // --- MODE ÉDITION ---
+        const ruleIndex = finalConfigurationData.rules.findIndex(
+          (rule) => rule.name === originalRuleNameToEdit,
+        );
+        if (ruleIndex === -1) throw new Error("Règle originale introuvable.");
+
+        finalConfigurationData.rules[ruleIndex] = {
+          ...finalConfigurationData.rules[ruleIndex],
+          ...currentRuleState,
+          modifiedBy: userName,
+          modifiedAt: today,
+        };
+      } else {
+        // --- MODE CRÉATION ---
+        if (
+          finalConfigurationData.rules.some(
+            (rule) => rule.name === currentRuleState.name,
+          )
+        ) {
+          alert(
+            `Une codification nommée "${currentRuleState.name}" existe déjà.`,
+          );
+          renderCreateNamingRulePage(mainContentDiv, currentRuleState); // Ré-affiche avec les données actuelles
+          attachCreatePageListeners();
+          return;
+        }
+        finalConfigurationData.rules.push({
+          ...currentRuleState,
+          createdBy: userName,
+          createdAt: today,
+          modifiedBy: userName,
+          modifiedAt: today,
+        });
+      }
+
+      await saveConfigurationFile(
+        triconnectAPI,
+        globalAccessToken,
+        finalConfigurationData,
+        NAMING_CONFIG_FILENAME,
+        configFolderId,
+      );
+
+      originalRuleNameToEdit = null; // Nettoyer l'état d'édition
+      renderSuccess(
+        mainContentDiv,
+        `La codification "${currentRuleState.name}" a été enregistrée avec succès.`,
+      );
+      setTimeout(handleManageNamingRulesClick, 2000);
+    } catch (error) {
+      console.error(
+        "Échec de la sauvegarde/modification de la codification:",
+        error,
+      );
+      originalRuleNameToEdit = null;
+      renderError(mainContentDiv, error);
+    }
+  }
+  // ----------------------------------
+  function validatePart(value, rule) {
       // 1. Gérer le cas "non obligatoire"
       if (!rule.required && !value) {
         return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
@@ -335,144 +643,23 @@ import {
           return { isValid: true }; // Type inconnu, on ne bloque pas
       }
     }
-    //fonction pour aide à codification
-    async function checkStateAndRenderNamingZone() {
-      const { file, selectedFolderId } = helpCodificationState;
-      const namingZoneContainer = document.getElementById(
-        "naming-zone-container",
+   async function handleManageNamingRulesClick() {
+    renderLoading(mainContentDiv);
+    try {
+      const config = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
       );
-      const uploadBtn = document.getElementById("upload-document-btn");
-
-      if (!file || !selectedFolderId) return;
-
-      try {
-        namingZoneContainer.innerHTML = "<p>Recherche de la convention...</p>";
-        const assignmentsConfig = await fetchConfigurationFile(
-          globalAccessToken,
-          configFolderId,
-          NAMING_ASSIGNMENTS_FILENAME,
-        );
-        const conventionName = assignmentsConfig
-          ? assignmentsConfig[selectedFolderId]
-          : null;
-
-        if (!conventionName) {
-          namingZoneContainer.innerHTML = "<p>...</p>";
-          uploadBtn.disabled = false;
-          // On attache l'événement pour l'upload avec le nom original
-          uploadBtn.addEventListener("click", () => handleFinalUpload(null));
-          return;
-        }
-
-        const namingConfig = await fetchConfigurationFile(
-          globalAccessToken,
-          configFolderId,
-          NAMING_CONFIG_FILENAME,
-        );
-        const convention = namingConfig.rules.find(
-          (r) => r.name === conventionName,
-        );
-        if (!convention)
-          throw new Error(
-            `Convention de nommage "${conventionName}" introuvable.`,
-          );
-
-        renderNamingZone(namingZoneContainer, convention);
-        attachNamingZoneListeners(convention); // <== NOUVEAU : On attache les listeners
-        uploadBtn.disabled = false;
-        // On attache l'événement pour l'upload avec la convention
-        uploadBtn.addEventListener("click", () =>
-          handleFinalUpload(convention),
-        );
-      } catch (error) {
-        console.error(
-          "Erreur lors de l'affichage de la zone de nommage :",
-          error,
-        );
-        namingZoneContainer.innerHTML = `<p style="color: red;">${error.message}</p>`;
-        uploadBtn.disabled = true;
-      }
+      const rules = config ? config.rules : [];
+      renderManageNamingRulesPage(mainContentDiv, rules);
+      attachManageRulesEvents(rules); // On attache les événements pour les boutons
+    } catch (error) {
+      console.error("Erreur lors du chargement des règles de nommage :", error);
+      renderError(mainContentDiv, error);
     }
-    //fonction pour déposer le document renommé
-    function attachNamingZoneListeners(convention) {
-      const inputs = document.querySelectorAll(".naming-input");
-      inputs.forEach((input) => {
-        input.addEventListener("input", () =>
-          updateNamingPreviewAndValidate(convention),
-        );
-      });
-      updateNamingPreviewAndValidate(convention); // Premier appel pour l'état initial
-    }
-
-    function updateNamingPreviewAndValidate(convention) {
-      const previewSpan = document.getElementById("final-name-preview");
-      const uploadBtn = document.getElementById("upload-document-btn");
-      let finalNameParts = [];
-      let isFormValid = true;
-
-      convention.columns.forEach((colRule, index) => {
-        const input = document.querySelector(
-          `.naming-input[data-index="${index}"]`,
-        );
-        let value = input.value;
-
-        // Validation en temps réel
-        const validationResult = validatePart(value, colRule);
-        if (validationResult.isValid) {
-          input.classList.remove("invalid-input");
-        } else {
-          input.classList.add("invalid-input");
-          isFormValid = false; // Le formulaire est invalide si au moins un champ l'est
-        }
-        finalNameParts.push(value);
-      });
-
-      const fileExtension = helpCodificationState.file.name.split(".").pop();
-      previewSpan.textContent = `${finalNameParts.join("-")}.${fileExtension}`;
-      uploadBtn.disabled = !isFormValid; // Le bouton est désactivé si le formulaire est invalide
-    }
-
-    //  FONCTION pour l'upload final
-    async function handleFinalUpload(convention) {
-      const { file, selectedFolderId } = helpCodificationState;
-      if (!file || !selectedFolderId) {
-        alert("Veuillez sélectionner un fichier et un dossier de destination.");
-        return;
-      }
-
-      let finalFileName = file.name;
-
-      // Si une convention est fournie, on construit le nom final
-      if (convention) {
-        const finalNamePreview =
-          document.getElementById("final-name-preview").textContent;
-        if (!finalNamePreview) {
-          alert("Impossible de construire le nom final du fichier.");
-          return;
-        }
-        finalFileName = finalNamePreview;
-      }
-
-      renderSaving(mainContentDiv);
-
-      try {
-        // Utilisation de l'API Trimble pour uploader le fichier
-        const result = await triconnectAPI.file.uploadFile(
-          selectedFolderId,
-          new File([file], finalFileName, { type: file.type }), // On recrée un fichier avec le nouveau nom
-        );
-
-        renderSuccess(
-          mainContentDiv,
-          `Le fichier "${finalFileName}" a été déposé avec succès !`,
-        );
-        setTimeout(handleHelpNamingClick, 2000); // Revenir à la page d'aide
-      } catch (error) {
-        console.error("Erreur lors du dépôt du fichier :", error);
-        renderError(mainContentDiv, error);
-      }
-    }
-    // fonction d'export pdf
+  }
+// fonction d'export pdf
     async function handleExportControlPDF(documentsByConvention, allRules) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4" });
@@ -529,7 +716,6 @@ import {
         `Controle_Nommage_${new Date().toISOString().split("T")[0]}.pdf`,
       );
     }
-
     //  FONCTION pour l'export Excel (CSV)
     async function handleExportControlExcel(documentsByConvention, allRules) {
       let csvRows = [];
@@ -585,91 +771,6 @@ import {
       link.click();
       document.body.removeChild(link);
     }
-
-    // Fonction pour la page de configuration (inchangé, mais défini ici)
-    async function handleConfigNamingRuleClick() {
-      console.log("Clic sur Configuration Nommage");
-      if (!isAdmin) {
-        alert(
-          "Accès refusé : Seuls les administrateurs peuvent configurer le nommage.",
-        );
-        renderHomePageWithButtons(mainContentDiv, isAdmin); // Revenir à la page d'accueil
-        return;
-      }
-      renderLoading(mainContentDiv);
-
-      try {
-        // Rendre la page de configuration générale
-        renderConfigPage(mainContentDiv, isAdmin);
-
-        // Attacher les gestionnaires d'événements aux boutons de la page de configuration
-        document
-          .getElementById("create-naming-btn")
-          .addEventListener("click", handleCreateNamingRuleClick);
-        document
-          .getElementById("manage-naming-btn")
-          .addEventListener("click", handleManageNamingRulesClick);
-        document
-          .getElementById("assign-naming-btn")
-          .addEventListener("click", handleAssignNamingRulesClick);
-
-        // Charger et rendre le tableau récapitulatif
-        await loadAndRenderNamingSummary();
-      } catch (error) {
-        console.error(
-          "Erreur lors de l'affichage de la page de configuration:",
-          error,
-        );
-        renderError(mainContentDiv, error);
-      }
-    }
-    // Attacher les événements aux boutons du BANDEAU
-    document
-      .getElementById("helpNamingBtn")
-      .addEventListener("click", handleHelpNamingClick);
-    document
-      .getElementById("controlNamingBtn")
-      .addEventListener("click", handleControlNamingClick);
-    document
-      .getElementById("configNamingBtn")
-      .addEventListener("click", handleConfigNamingRuleClick);
-
-    // Afficher la page d'accueil et attacher les événements des boutons de la page
-    renderHomePageWithButtons(mainContentDiv, isAdmin);
-    document
-      .getElementById("homeHelpNamingBtn")
-      .addEventListener("click", handleHelpNamingClick);
-    document
-      .getElementById("homeControlNamingBtn")
-      .addEventListener("click", handleControlNamingClick);
-    document
-      .getElementById("homeConfigNamingBtn")
-      .addEventListener("click", handleConfigNamingRuleClick);
-  } catch (error) {
-    console.error(
-      "Erreur critique lors de l'initialisation de l'extension :",
-      error,
-    );
-    renderError(mainContentDiv, error);
-  }
-
-  async function handleManageNamingRulesClick() {
-    renderLoading(mainContentDiv);
-    try {
-      const config = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_CONFIG_FILENAME,
-      );
-      const rules = config ? config.rules : [];
-      renderManageNamingRulesPage(mainContentDiv, rules);
-      attachManageRulesEvents(rules); // On attache les événements pour les boutons
-    } catch (error) {
-      console.error("Erreur lors du chargement des règles de nommage :", error);
-      renderError(mainContentDiv, error);
-    }
-  }
-
   // Fonction pour affecter une convention à des dossiers
   async function handleAssignNamingRulesClick() {
     if (!triconnectAPI || !globalAccessToken) {
@@ -1009,108 +1110,6 @@ import {
     }
   }
 
-  // FONCTION pour gerer les boutons de création de convention de nommage
-  async function handleCreateNamingRuleClick() {
-    originalRuleNameToEdit = null; // Assure qu'on est bien en mode création
-    // Initialise l'état pour une nouvelle règle
-    currentRuleState = {
-      name: "",
-      columns: [],
-      editMode: "normal",
-    };
-
-    // Premier affichage de la page
-    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
-    attachCreatePageListeners();
-  }
-
-  // fonction pour enregistrer la convention de nommage
-  async function handleSaveNamingRuleClick() {
-    // 1. Mettre à jour l'état avec la dernière valeur de l'input
-    currentRuleState.name = document
-      .getElementById("naming-rule-name")
-      .value.trim();
-
-    if (!currentRuleState.name) {
-      alert("Veuillez donner un nom à la codification.");
-      return;
-    }
-
-    renderSaving(mainContentDiv);
-
-    try {
-      const loggedInUser = await fetchLoggedInUserDetails(globalAccessToken);
-      const userName =
-        `${loggedInUser.firstName} ${loggedInUser.lastName}`.trim();
-      const today = new Date().toISOString().split("T")[0];
-
-      const existingConfig = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_CONFIG_FILENAME,
-      );
-      const finalConfigurationData = existingConfig || { rules: [] };
-
-      if (originalRuleNameToEdit) {
-        // --- MODE ÉDITION ---
-        const ruleIndex = finalConfigurationData.rules.findIndex(
-          (rule) => rule.name === originalRuleNameToEdit,
-        );
-        if (ruleIndex === -1) throw new Error("Règle originale introuvable.");
-
-        finalConfigurationData.rules[ruleIndex] = {
-          ...finalConfigurationData.rules[ruleIndex],
-          ...currentRuleState,
-          modifiedBy: userName,
-          modifiedAt: today,
-        };
-      } else {
-        // --- MODE CRÉATION ---
-        if (
-          finalConfigurationData.rules.some(
-            (rule) => rule.name === currentRuleState.name,
-          )
-        ) {
-          alert(
-            `Une codification nommée "${currentRuleState.name}" existe déjà.`,
-          );
-          renderCreateNamingRulePage(mainContentDiv, currentRuleState); // Ré-affiche avec les données actuelles
-          attachCreatePageListeners();
-          return;
-        }
-        finalConfigurationData.rules.push({
-          ...currentRuleState,
-          createdBy: userName,
-          createdAt: today,
-          modifiedBy: userName,
-          modifiedAt: today,
-        });
-      }
-
-      await saveConfigurationFile(
-        triconnectAPI,
-        globalAccessToken,
-        finalConfigurationData,
-        NAMING_CONFIG_FILENAME,
-        configFolderId,
-      );
-
-      originalRuleNameToEdit = null; // Nettoyer l'état d'édition
-      renderSuccess(
-        mainContentDiv,
-        `La codification "${currentRuleState.name}" a été enregistrée avec succès.`,
-      );
-      setTimeout(handleManageNamingRulesClick, 2000);
-    } catch (error) {
-      console.error(
-        "Échec de la sauvegarde/modification de la codification:",
-        error,
-      );
-      originalRuleNameToEdit = null;
-      renderError(mainContentDiv, error);
-    }
-  }
-
   const onColumnAdd = (newColumn) => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
     currentRuleState.columns.push(newColumn);
@@ -1195,68 +1194,4 @@ import {
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     attachCreatePageListeners();
   };
-  // Fonction pour charger et rendre le tableau récapitulatif des codifications
-  async function loadAndRenderNamingSummary() {
-    const summaryContainer = document.getElementById(
-      "naming-config-summary-container",
-    );
-    if (!summaryContainer) return; // S'assurer que le conteneur existe
-
-    summaryContainer.innerHTML = `<p style="text-align:center; margin-top:20px;">Chargement du récapitulatif des codifications...</p>`;
-
-    try {
-      // Pour l'instant, on va simuler des données car la logique de sauvegarde n'est pas encore implémentée
-      const namingConfig = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_CONFIG_FILENAME,
-      );
-      const assignmentsConfig = await fetchConfigurationFile(
-        globalAccessToken,
-        configFolderId,
-        NAMING_ASSIGNMENTS_FILENAME,
-      );
-      const allProjectFolders = await fetchAllProjectFolders(
-        triconnectAPI,
-        globalAccessToken,
-      );
-
-      const folderIdToNameMap = new Map(
-        allProjectFolders.map((f) => [f.id, f.name]),
-      );
-
-      const allNamingRules = namingConfig?.rules || [];
-      const allAssignments = assignmentsConfig || {};
-      const assignmentsByRule = {};
-
-      for (const folderId in allAssignments) {
-        const ruleName = allAssignments[folderId];
-        if (ruleName) {
-          if (!assignmentsByRule[ruleName]) {
-            assignmentsByRule[ruleName] = [];
-          }
-          const folderName = folderIdToNameMap.get(folderId);
-          if (folderName) {
-            assignmentsByRule[ruleName].push(folderName);
-          }
-        }
-      }
-
-      const summaryData = allNamingRules.map((rule) => ({
-        ruleName: rule.name,
-        affectedFolders: assignmentsByRule[rule.name] || [],
-        date: rule.modifiedAt || rule.createdAt || "N/A",
-        creator: rule.modifiedBy || rule.createdBy || "N/A",
-      }));
-
-      renderNamingConfigSummaryTable(summaryContainer, summaryData);
-    } catch (error) {
-      console.error(
-        "Erreur lors du chargement du résumé des codifications :",
-        error,
-      );
-      summaryContainer.innerHTML = `<p style="color: red; text-align:center; margin-top:20px;">Erreur lors du chargement des données : ${error.message}</p>`;
-      renderError(mainContentDiv, error); // Affiche aussi l'erreur principale
-    }
-  }
 })();
