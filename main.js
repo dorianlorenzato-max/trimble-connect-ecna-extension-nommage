@@ -225,6 +225,17 @@ import {
       });
 
       renderControlPage(mainContentDiv, documentsByConvention, allRules);
+
+      document
+        .getElementById("export-pdf-btn")
+        .addEventListener("click", () =>
+          handleExportControlPDF(documentsByConvention, allRules),
+        );
+      document
+        .getElementById("export-excel-btn")
+        .addEventListener("click", () =>
+          handleExportControlExcel(documentsByConvention, allRules),
+        );
     } catch (error) {
       console.error(
         "Erreur lors du chargement de la page de contrôle :",
@@ -234,6 +245,117 @@ import {
     }
   }
 
+  // fonction d'export pdf
+  async function handleExportControlPDF(documentsByConvention, allRules) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "l", unit: "mm", format: "a4" });
+    const today = new Date().toLocaleDateString();
+
+    doc.setFontSize(18).text("Rapport de Contrôle de Nommage", 14, 22);
+    doc.setFontSize(11).text(`Date de l'export : ${today}`, 14, 30);
+
+    let startY = 40;
+
+    for (const conventionName in documentsByConvention) {
+      const conventionRules = allRules.find((r) => r.name === conventionName);
+      if (!conventionRules) continue;
+
+      doc.setFontSize(14).text(`Convention : ${conventionName}`, 14, startY);
+      startY += 7;
+
+      const head = [
+        ["Dépositaire", ...conventionRules.columns.map((c) => c.name)],
+      ];
+      const body = documentsByConvention[conventionName].map((doc) => {
+        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const row = [doc.depositor];
+
+        conventionRules.columns.forEach((colRule, index) => {
+          let value = parts[index] || "";
+          if (colRule.type === "trigram") value = value.toUpperCase();
+
+          const validationResult = validatePart(value, colRule);
+          if (validationResult.isValid) {
+            row.push(value);
+          } else {
+            row.push({
+              content: value,
+              styles: { fillColor: [253, 222, 222] }, // Rouge pâle
+            });
+          }
+        });
+        return row;
+      });
+
+      doc.autoTable({
+        head: head,
+        body: body,
+        startY: startY,
+        theme: "grid",
+        headStyles: { fillColor: [0, 58, 114] },
+      });
+
+      startY = doc.autoTable.previous.finalY + 15; // Espace pour la prochaine table
+    }
+
+    doc.save(`Controle_Nommage_${new Date().toISOString().split("T")[0]}.pdf`);
+  }
+
+  //  FONCTION pour l'export Excel (CSV)
+  async function handleExportControlExcel(documentsByConvention, allRules) {
+    let csvRows = [];
+
+    for (const conventionName in documentsByConvention) {
+      const conventionRules = allRules.find((r) => r.name === conventionName);
+      if (!conventionRules) continue;
+
+      // Ajoute un titre pour la section
+      csvRows.push(`Convention: ${conventionName}`);
+
+      const headers = [
+        "Dépositaire",
+        ...conventionRules.columns.map((c) => c.name),
+      ];
+      csvRows.push(headers.join(";"));
+
+      documentsByConvention[conventionName].forEach((doc) => {
+        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const row = [doc.depositor];
+
+        conventionRules.columns.forEach((colRule, index) => {
+          let value = parts[index] || "";
+          if (colRule.type === "trigram") value = value.toUpperCase();
+
+          const validationResult = validatePart(value, colRule);
+          if (validationResult.isValid) {
+            row.push(`"${value}"`); // Mettre entre guillemets pour éviter les problèmes avec les virgules
+          } else {
+            row.push(`"[ERREUR] ${value}"`);
+          }
+        });
+        csvRows.push(row.join(";"));
+      });
+
+      csvRows.push(""); // Ligne vide pour séparer les conventions
+    }
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([`\uFEFF${csvString}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `Controle_Nommage_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
   async function handleConfigNamingRuleClick() {
     console.log("Clic sur Configuration Nommage");
     if (!isAdmin) {
