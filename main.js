@@ -28,6 +28,7 @@ import {
   renderAssignNamingPage,
   updateAssignmentPanel,
   renderControlPage,
+  renderHelpCodificationPage,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -44,6 +45,10 @@ import {
   let isAdmin = false; // Variable pour stocker le statut administrateur
   let currentRuleState = null; //  notre variable d'état pour la gestions de colonnes de convention de nommage
   let originalRuleNameToEdit = null;
+  let helpCodificationState = {
+    file: null,
+    selectedFolderId: null,
+  };
 
   // --- INITIALISATION DE L'EXTENSION ---
   try {
@@ -128,12 +133,79 @@ import {
   }
 
   async function handleHelpNamingClick() {
-    // Logique pour le bouton "Aide Codification"
-    console.log("Clic sur Aide Codification");
-    renderLoading(mainContentDiv); // Affiche un message de chargement
-    // Ici, vous appelerez la fonction de rendu spécifique pour l'aide
-    mainContentDiv.innerHTML =
-      "<h2>Aide à la Codification (à développer)</h2><p>Contenu de l'aide...</p>";
+    renderLoading(mainContentDiv);
+    try {
+      // Réinitialiser l'état à chaque fois qu'on affiche la page
+      helpCodificationState = { file: null, selectedFolderId: null };
+
+      renderHelpCodificationPage(mainContentDiv);
+      attachHelpPageListeners();
+
+      // Charger l'arborescence des dossiers en respectant les permissions
+      const rootFolders = await triconnectAPI.folder.getFolders();
+      const treeRootElement = document.getElementById("folder-tree-root");
+      treeRootElement.innerHTML = "";
+      renderPermissionAwareFolderTree(treeRootElement, rootFolders);
+    } catch (error) {
+      console.error("Erreur lors de l'affichage de la page d'aide :", error);
+      renderError(mainContentDiv, error);
+    }
+  }
+
+  // FONCTION pour attacher les événements de la page d'aide
+  function attachHelpPageListeners() {
+    const dropZone = document.getElementById("file-drop-zone");
+    const fileInput = document.getElementById("file-upload-input");
+
+    // Logique pour le bouton "Ajouter document"
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelected(e.target.files[0]);
+      }
+    });
+
+    // Logique pour le cliquer-glisser
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", () =>
+      dropZone.classList.remove("drag-over"),
+    );
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      if (e.dataTransfer.files.length > 0) {
+        handleFileSelected(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  //  FONCTION pour gérer le fichier sélectionné
+  function handleFileSelected(file) {
+    helpCodificationState.file = file;
+    const dropZoneText = document.getElementById("drop-zone-text");
+    dropZoneText.textContent = `Fichier sélectionné : ${file.name}`;
+    console.log("Fichier prêt :", helpCodificationState.file);
+  }
+
+  //  FONCTION pour gérer l'arborescence avec permissions
+  function renderPermissionAwareFolderTree(parentElement, folders) {
+    folders.forEach((folder) => {
+      const listItem = document.createElement("li");
+
+      folderNameSpan.addEventListener("click", async (event) => {
+        // METTRE À JOUR L'ÉTAT
+        helpCodificationState.selectedFolderId = folder.id;
+        console.log(
+          "Dossier sélectionné :",
+          helpCodificationState.selectedFolderId,
+        );
+
+        // ... (logique de dépliement/chargement des sous-dossiers utilisant triconnectAPI.folder.getFolders(folder.id))
+      });
+    });
   }
 
   function validatePart(value, rule) {
