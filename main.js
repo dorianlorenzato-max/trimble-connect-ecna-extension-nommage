@@ -29,6 +29,7 @@ import {
   updateAssignmentPanel,
   renderControlPage,
   renderHelpCodificationPage,
+  renderNamingZone,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -274,63 +275,74 @@ import {
     const dropZoneText = document.getElementById("drop-zone-text");
     dropZoneText.textContent = `Fichier sélectionné : ${file.name}`;
     console.log("Fichier prêt :", helpCodificationState.file);
+    checkStateAndRenderNamingZone();
   }
 
   //  FONCTION pour gérer l'arborescence avec permissions
   function renderPermissionAwareFolderTree(parentElement, folders) {
     if (!folders || folders.length === 0) {
-        const noSubfolderItem = document.createElement("li");
-        noSubfolderItem.textContent = "Aucun sous-dossier";
-        parentElement.appendChild(noSubfolderItem);
-        return;
+      const noSubfolderItem = document.createElement("li");
+      noSubfolderItem.textContent = "Aucun sous-dossier";
+      parentElement.appendChild(noSubfolderItem);
+      return;
     }
 
-    folders.forEach(folder => {
-        const listItem = document.createElement("li");
-        listItem.className = "folder-item";
-        listItem.dataset.folderId = folder.id;
-        listItem.dataset.loaded = "false";
+    folders.forEach((folder) => {
+      const listItem = document.createElement("li");
+      listItem.className = "folder-item";
+      listItem.dataset.folderId = folder.id;
+      listItem.dataset.loaded = "false";
 
-        const folderNameSpan = document.createElement("span");
-        folderNameSpan.className = "folder-name";
-        folderNameSpan.textContent = folder.name;
+      const folderNameSpan = document.createElement("span");
+      folderNameSpan.className = "folder-name";
+      folderNameSpan.textContent = folder.name;
 
-        listItem.appendChild(folderNameSpan);
-        parentElement.appendChild(listItem);
+      listItem.appendChild(folderNameSpan);
+      parentElement.appendChild(listItem);
 
-        folderNameSpan.addEventListener("click", async (event) => {
-            event.stopPropagation();
-            document.querySelectorAll(".folder-item.selected").forEach(el => el.classList.remove("selected"));
-            listItem.classList.add("selected");
+      folderNameSpan.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        document
+          .querySelectorAll(".folder-item.selected")
+          .forEach((el) => el.classList.remove("selected"));
+        listItem.classList.add("selected");
 
-            helpCodificationState.selectedFolderId = folder.id;
-            console.log("Dossier sélectionné :", helpCodificationState.selectedFolderId);
-            
-            if (listItem.dataset.loaded === "true") {
-                const subList = listItem.querySelector("ul");
-                if (subList) subList.style.display = subList.style.display === "none" ? "block" : "none";
-                return;
-            }
+        helpCodificationState.selectedFolderId = folder.id;
+        console.log(
+          "Dossier sélectionné :",
+          helpCodificationState.selectedFolderId,
+        );
+        checkStateAndRenderNamingZone();
+        if (listItem.dataset.loaded === "true") {
+          const subList = listItem.querySelector("ul");
+          if (subList)
+            subList.style.display =
+              subList.style.display === "none" ? "block" : "none";
+          return;
+        }
 
-            const loadingSpan = document.createElement("span");
-            loadingSpan.textContent = " (chargement...)";
-            folderNameSpan.appendChild(loadingSpan);
+        const loadingSpan = document.createElement("span");
+        loadingSpan.textContent = " (chargement...)";
+        folderNameSpan.appendChild(loadingSpan);
 
-            try {
-                // On utilise notre fonction fetchFolderContents qui a prouvé sa fiabilité
-                const subFolders = await fetchFolderContents(folder.id, globalAccessToken);
-                
-                const subList = document.createElement("ul");
-                subList.className = "folder-tree";
-                listItem.appendChild(subList);
-                renderPermissionAwareFolderTree(subList, subFolders);
-                listItem.dataset.loaded = "true";
-            } catch (error) {
-                console.error(`Erreur au chargement du dossier ${folder.id}`, error);
-            } finally {
-                folderNameSpan.removeChild(loadingSpan);
-            }
-        });
+        try {
+          // On utilise notre fonction fetchFolderContents qui a prouvé sa fiabilité
+          const subFolders = await fetchFolderContents(
+            folder.id,
+            globalAccessToken,
+          );
+
+          const subList = document.createElement("ul");
+          subList.className = "folder-tree";
+          listItem.appendChild(subList);
+          renderPermissionAwareFolderTree(subList, subFolders);
+          listItem.dataset.loaded = "true";
+        } catch (error) {
+          console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+        } finally {
+          folderNameSpan.removeChild(loadingSpan);
+        }
+      });
     });
   }
 
@@ -387,8 +399,65 @@ import {
         return { isValid: true }; // Type inconnu, on ne bloque pas
     }
   }
-  // async function handleControlNamingClick() {
+  //fonction pour aide à codification
+  async function checkStateAndRenderNamingZone() {
+    const { file, selectedFolderId } = helpCodificationState;
+    const namingZoneContainer = document.getElementById(
+      "naming-zone-container",
+    );
+    const uploadBtn = document.getElementById("upload-document-btn");
 
+    if (!file || !selectedFolderId) {
+      return; // On ne fait rien si l'une des deux conditions n'est pas remplie
+    }
+
+    try {
+      namingZoneContainer.innerHTML =
+        "<p>Recherche de la convention de nommage...</p>";
+
+      const assignmentsConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_ASSIGNMENTS_FILENAME,
+      );
+      const conventionName = assignmentsConfig
+        ? assignmentsConfig[selectedFolderId]
+        : null;
+
+      if (!conventionName) {
+        namingZoneContainer.innerHTML =
+          '<p style="font-style: italic;">Pas de nommage spécifique attendu pour ce dossier.</p>';
+        uploadBtn.disabled = false; // L'utilisateur peut déposer avec le nom original
+        return;
+      }
+
+      const namingConfig = await fetchConfigurationFile(
+        globalAccessToken,
+        configFolderId,
+        NAMING_CONFIG_FILENAME,
+      );
+      const convention = namingConfig.rules.find(
+        (r) => r.name === conventionName,
+      );
+
+      if (!convention) {
+        throw new Error(
+          `Convention de nommage "${conventionName}" introuvable.`,
+        );
+      }
+
+      // La convention est trouvée, on affiche la zone de nommage
+      renderNamingZone(namingZoneContainer, convention);
+      uploadBtn.disabled = false; // On active le bouton de dépôt
+    } catch (error) {
+      console.error(
+        "Erreur lors de l'affichage de la zone de nommage :",
+        error,
+      );
+      namingZoneContainer.innerHTML = `<p style="color: red;">${error.message}</p>`;
+      uploadBtn.disabled = true;
+    }
+  }
   // fonction d'export pdf
   async function handleExportControlPDF(documentsByConvention, allRules) {
     const { jsPDF } = window.jspdf;
