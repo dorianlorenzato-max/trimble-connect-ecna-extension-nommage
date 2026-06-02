@@ -661,11 +661,23 @@ function renderHelpCodificationPage(container) {
 }
 
 function renderNamingZone(container, convention) {
+  const typeDisplayMap = {
+    text: "Texte libre",
+    list: "Sélectionner...",
+    number1: "1 chiffre (ex: 3)",
+    number2: "2 chiffres (ex: 07)",
+    number3: "3 chiffres (ex: 101)",
+    trigram: "3 lettres (ex: ARC)",
+  };
+
   const fieldsHtml = convention.columns
     .map((col, index) => {
+      const placeholder = typeDisplayMap[col.type] || "";
+      const isRequired = col.required
+        ? ' <span class="required-asterisk">*</span>'
+        : "";
       let inputHtml = "";
 
-      // Génère le bon type d'input en fonction de la règle
       if (col.type === "list" && col.values.length > 0) {
         const options = col.values
           .map(
@@ -673,19 +685,27 @@ function renderNamingZone(container, convention) {
               `<option value="${v.value}" title="${v.description}">${v.value} - ${v.description}</option>`,
           )
           .join("");
-        inputHtml = `<select class="naming-input" data-index="${index}">${options}</select>`;
+        inputHtml = `<select class="naming-input" data-index="${index}">
+                     <option value="">-- ${placeholder} --</option>
+                     ${options}
+                   </select>`;
       } else {
-        // Pour tous les autres types, un simple champ de texte
-        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${col.name}">`;
+        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}">`;
       }
 
-      // Ajoute un séparateur (sauf pour le dernier)
       const separator =
         index < convention.columns.length - 1
           ? '<span class="separator">-</span>'
           : "";
 
-      return `<div class="naming-field">${inputHtml}${separator}</div>`;
+      return `
+      <div class="naming-field-wrapper">
+        <label>${col.name}${isRequired}</label>
+        <div class="naming-field">
+          ${inputHtml}${separator}
+        </div>
+      </div>
+    `;
     })
     .join("");
 
