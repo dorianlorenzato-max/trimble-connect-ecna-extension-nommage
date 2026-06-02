@@ -451,6 +451,71 @@ async function fetchAllControlledDocuments(
 
   return allDocuments;
 }
+
+async function uploadFileWithNewName(
+  triconnectAPI,
+  accessToken,
+  parentFolderId,
+  fileObject,
+) {
+  const apiBaseUrl = "https://app21.connect.trimble.com/tc/api/2.0";
+  const initiateUploadUrl = `${apiBaseUrl}/files/fs/upload?parentId=${parentFolderId}&parentType=FOLDER`;
+  const initiatePayload = { name: fileObject.name };
+
+  // 1. Initier l'upload
+  const initiateResponse = await fetch(initiateUploadUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(initiatePayload),
+  });
+
+  if (!initiateResponse.ok) {
+    throw new Error(
+      `Initiation de l'upload échouée (${initiateResponse.status})`,
+    );
+  }
+
+  const uploadDetails = await initiateResponse.json();
+  const finalUploadUrl = uploadDetails.contents[0].url;
+  const uploadId = uploadDetails.uploadId;
+
+  // 2. Téléverser le contenu du fichier
+  const uploadResponse = await fetch(finalUploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": fileObject.type },
+    body: fileObject, // On envoie l'objet File directement
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error(
+      `L'upload final du fichier a échoué (${uploadResponse.status})`,
+    );
+  }
+
+  // 3. Vérifier l'upload
+  const verifyUrl = `${apiBaseUrl}/files/fs/upload?uploadId=${uploadId}&wait=true`;
+  const verifyResponse = await fetch(verifyUrl, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!verifyResponse.ok) {
+    throw new Error(
+      `La vérification de l'upload a échoué (${verifyResponse.status})`,
+    );
+  }
+
+  const finalFileDetails = await verifyResponse.json();
+  if (finalFileDetails.status !== "DONE") {
+    throw new Error(`Le traitement du fichier sur le serveur a échoué.`);
+  }
+
+  return finalFileDetails;
+}
+
 // On exporte les fonctions pour qu'elles soient utilisables dans main.js
 export {
   fetchProjectGroups,
@@ -467,4 +532,5 @@ export {
   fetchUserProjectRole,
   getUsersToGroupsMap,
   fetchAllControlledDocuments,
+  uploadFileWithNewName,
 };
