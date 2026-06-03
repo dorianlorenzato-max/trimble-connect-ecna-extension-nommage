@@ -497,9 +497,12 @@ async function checkFolderPermission(folderId, accessToken, userId) {
 
     const permissionsData = await response.json();
     const acl = permissionsData.acl;
+    console.log(`2. Permissions pour le dossier ${folderId}:`, permissionsData);
+    console.log(`... ID utilisateur recherché : ${userId}`);
 
     // Si l'objet acl n'existe pas, on ne peut rien déterminer
-    if (!acl) return null;
+    if (!acl) console.log(`... Rôle déduit : null (pas d'ACL)`);
+    return null;
 
     // On vérifie si l'ID de l'utilisateur est dans la liste FULL_ACCESS
     if (
@@ -507,6 +510,7 @@ async function checkFolderPermission(folderId, accessToken, userId) {
       Array.isArray(acl.FULL_ACCESS) &&
       acl.FULL_ACCESS.includes(userId)
     ) {
+      console.log(`... Rôle déduit : full_access`);
       return "full_access";
     }
 
