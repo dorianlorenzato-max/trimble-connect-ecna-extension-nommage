@@ -12,6 +12,8 @@ import {
   recursivelyFetchAllSubfolders,
   fetchAllControlledDocuments,
   uploadFileWithNewName,
+  fetchAllProjectFoldersWithDetails,
+  checkFolderPermission,
 } from "./api.js";
 import {
   renderLoading,
@@ -51,6 +53,7 @@ import {
     finalName: null,
     convention: null,
   };
+  let folderPermissionCache = null;
 
   // ==================================================================
   // == SÉQUENCE D'INITIALISATION (UNE SEULE FOIS AU DÉMARRAGE)      ==
@@ -108,7 +111,6 @@ import {
 
     // Affiche directement la page d'aide à la codification au démarrage
     handleHelpNamingClick();
-    
   } catch (error) {
     console.error(
       "Erreur critique lors de l'initialisation de l'extension :",
@@ -134,15 +136,70 @@ import {
       };
       renderHelpCodificationPage(mainContentDiv);
       attachHelpPageListeners();
+
+      let necessaryFoldersData;
+
+      // Utiliser le cache si disponible
+      if (folderPermissionCache) {
+        necessaryFoldersData = folderPermissionCache;
+      } else {
+        const loadingText = document
+          .getElementById("folder-tree-root")
+          .querySelector("li");
+        if (loadingText)
+          loadingText.textContent =
+            "Analyse des permissions en cours (cela peut prendre un moment)...";
+
+        // 1. Récupérer tous les dossiers
+        const allFolders = await fetchAllProjectFoldersWithDetails(
+          triconnectAPI,
+          globalAccessToken,
+        );
+        const foldersById = new Map(allFolders.map((f) => [f.id, f]));
+
+        // 2. Identifier les cibles autorisées
+        const permissionChecks = allFolders.map((f) =>
+          checkFolderPermission(f.id, globalAccessToken),
+        );
+        const results = await Promise.all(permissionChecks);
+        const allowedTargetIds = new Set();
+        results.forEach((role, index) => {
+          if (role === "full_access") {
+            allowedTargetIds.add(allFolders[index].id);
+          }
+        });
+
+        // 3. Reconstruire l'arbre des chemins nécessaires
+        const necessaryFolderIds = new Set();
+        for (const targetId of allowedTargetIds) {
+          let currentId = targetId;
+          while (currentId && !necessaryFolderIds.has(currentId)) {
+            necessaryFolderIds.add(currentId);
+            const folder = foldersById.get(currentId);
+            currentId = folder ? folder.parentId : null;
+          }
+        }
+
+        necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
+        folderPermissionCache = necessaryFoldersData; // Mettre en cache
+      }
+
+      // 4. Afficher l'arborescence filtrée
       const rootFolders = await getRootFolders(
         triconnectAPI,
         globalAccessToken,
       );
       const treeRootElement = document.getElementById("folder-tree-root");
-      if (treeRootElement) {
-        treeRootElement.innerHTML = "";
-        renderPermissionAwareFolderTree(treeRootElement, rootFolders);
-      }
+      treeRootElement.innerHTML = ""; // Vider le message de chargement
+
+      const filteredRootFolders = rootFolders.filter((f) =>
+        necessaryFoldersData.necessaryFolderIds.has(f.id),
+      );
+      renderPermissionAwareFolderTree(
+        treeRootElement,
+        filteredRootFolders,
+        necessaryFoldersData,
+      );
     } catch (error) {
       console.error("Erreur lors de l'affichage de la page d'aide :", error);
       renderError(mainContentDiv, error);
@@ -261,52 +318,112 @@ import {
     checkStateAndRenderNamingZone();
   }
 
-  function renderPermissionAwareFolderTree(parentElement, folders) {
+  function renderPermissionAwareFolderTree(
+    parentElement,
+    folders,
+    permissionData,
+  ) {
+    const { necessaryFolderIds, allowedTargetIds } = permissionData;
+
     if (!folders || folders.length === 0) {
-      /* ... (inchangé) */ return;
+      const noSubfolderItem = document.createElement("li");
+      noSubfolderItem.className = "folder-item-empty";
+      noSubfolderItem.textContent = "Aucun sous-dossier";
+      parentElement.appendChild(noSubfolderItem);
+      return;
     }
+
     folders.forEach((folder) => {
+      const isAllowedTarget = allowedTargetIds.has(folder.id);
+
       const listItem = document.createElement("li");
-      listItem.className = "folder-item";
+      listItem.className = `folder-item ${isAllowedTarget ? "allowed-folder" : "path-folder"}`;
       listItem.dataset.folderId = folder.id;
       listItem.dataset.loaded = "false";
+
+      const expander = document.createElement("span");
+      expander.className = "expander";
+      expander.textContent = "▶ ";
+
       const folderNameSpan = document.createElement("span");
       folderNameSpan.className = "folder-name";
       folderNameSpan.textContent = folder.name;
+
+      listItem.appendChild(expander);
       listItem.appendChild(folderNameSpan);
       parentElement.appendChild(listItem);
-      folderNameSpan.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        document
-          .querySelectorAll(".folder-item.selected")
-          .forEach((el) => el.classList.remove("selected"));
-        listItem.classList.add("selected");
-        helpCodificationState.selectedFolderId = folder.id;
-        checkStateAndRenderNamingZone();
+
+      // --- Logique de Sélection (uniquement pour les dossiers autorisés) ---
+      if (isAllowedTarget) {
+        folderNameSpan.style.cursor = "pointer";
+        folderNameSpan.addEventListener("click", () => {
+          // Gère la mise en surbrillance visuelle
+          document
+            .querySelectorAll(".folder-item.selected")
+            .forEach((el) => el.classList.remove("selected"));
+          listItem.classList.add("selected");
+
+          // Met à jour l'état de l'application
+          helpCodificationState.selectedFolderId = folder.id;
+          checkStateAndRenderNamingZone();
+        });
+      } else {
+        folderNameSpan.style.cursor = "default";
+      }
+
+      // --- Logique de Dépliement (pour tous les dossiers affichés) ---
+      expander.addEventListener("click", async () => {
+        const subList = listItem.querySelector("ul");
+
+        // Si les sous-dossiers sont déjà chargés, on les affiche/masque simplement
         if (listItem.dataset.loaded === "true") {
-          const subList = listItem.querySelector("ul");
-          if (subList)
+          if (subList) {
             subList.style.display =
               subList.style.display === "none" ? "block" : "none";
+            expander.textContent =
+              subList.style.display === "none" ? "▶ " : "▼ ";
+          }
           return;
         }
+
+        // Affiche un message de chargement
         const loadingSpan = document.createElement("span");
         loadingSpan.textContent = " (chargement...)";
-        folderNameSpan.appendChild(loadingSpan);
+        expander.style.display = "none"; // Masque l'expandeur pendant le chargement
+        listItem.insertBefore(loadingSpan, folderNameSpan);
+
         try {
+          // On récupère et on filtre les sous-dossiers
           const subFolders = await fetchFolderContents(
             folder.id,
             globalAccessToken,
           );
-          const subList = document.createElement("ul");
-          subList.className = "folder-tree";
-          listItem.appendChild(subList);
-          renderPermissionAwareFolderTree(subList, subFolders);
+          const filteredSubFolders = subFolders.filter((f) =>
+            necessaryFolderIds.has(f.id),
+          );
+
+          const newSubList = document.createElement("ul");
+          newSubList.className = "folder-tree";
+          listItem.appendChild(newSubList);
+
+          // Appel récursif pour construire le niveau suivant
+          renderPermissionAwareFolderTree(
+            newSubList,
+            filteredSubFolders,
+            permissionData,
+          );
+
           listItem.dataset.loaded = "true";
+          expander.textContent = "▼ "; // Change l'icône en "déplié"
         } catch (error) {
           console.error(`Erreur au chargement du dossier ${folder.id}`, error);
+          listItem.removeChild(loadingSpan); // S'assure que le chargement est retiré en cas d'erreur
         } finally {
-          folderNameSpan.removeChild(loadingSpan);
+          // Retire le message de chargement et réaffiche l'expandeur
+          if (listItem.contains(loadingSpan)) {
+            listItem.removeChild(loadingSpan);
+          }
+          expander.style.display = "inline";
         }
       });
     });
