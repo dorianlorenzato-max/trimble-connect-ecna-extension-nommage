@@ -456,11 +456,15 @@ async function uploadFileWithNewName(
   triconnectAPI,
   accessToken,
   parentFolderId,
-  fileObject,
+  fileBlob,
+  newFileName,
+  fileType,
 ) {
   const apiBaseUrl = "https://app21.connect.trimble.com/tc/api/2.0";
   const initiateUploadUrl = `${apiBaseUrl}/files/fs/upload?parentId=${parentFolderId}&parentType=FOLDER`;
-  const initiatePayload = { name: fileObject.name };
+
+  // Utilise directement le nouveau nom fourni en argument
+  const initiatePayload = { name: newFileName };
 
   // 1. Initier l'upload
   const initiateResponse = await fetch(initiateUploadUrl, {
@@ -485,8 +489,8 @@ async function uploadFileWithNewName(
   // 2. Téléverser le contenu du fichier
   const uploadResponse = await fetch(finalUploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": fileObject.type },
-    body: fileObject, // On envoie l'objet File directement
+    headers: { "Content-Type": fileType }, // Utilise le type fourni
+    body: fileBlob, // Utilise le contenu du fichier fourni
   });
 
   if (!uploadResponse.ok) {
@@ -495,7 +499,7 @@ async function uploadFileWithNewName(
     );
   }
 
-  // 3. Vérifier l'upload
+  // 3. Vérifier l'upload (inchangé)
   const verifyUrl = `${apiBaseUrl}/files/fs/upload?uploadId=${uploadId}&wait=true`;
   const verifyResponse = await fetch(verifyUrl, {
     method: "GET",
