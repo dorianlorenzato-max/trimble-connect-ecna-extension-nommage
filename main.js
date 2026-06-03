@@ -45,7 +45,11 @@ import {
   let isAdmin = false;
   let currentRuleState = null;
   let originalRuleNameToEdit = null;
-  let helpCodificationState = { file: null, selectedFolderId: null };
+  let helpCodificationState = {
+    file: null,
+    selectedFolderId: null,
+    finalName: null,
+  };
 
   // ==================================================================
   // == SÉQUENCE D'INITIALISATION (UNE SEULE FOIS AU DÉMARRAGE)      ==
@@ -129,7 +133,11 @@ import {
   async function handleHelpNamingClick() {
     renderLoading(mainContentDiv);
     try {
-      helpCodificationState = { file: null, selectedFolderId: null };
+      helpCodificationState = {
+        file: null,
+        selectedFolderId: null,
+        finalName: null,
+      };
       renderHelpCodificationPage(mainContentDiv);
       attachHelpPageListeners();
       const rootFolders = await getRootFolders(
@@ -388,46 +396,47 @@ import {
       finalNameParts.push(value);
     });
     const fileExtension = helpCodificationState.file.name.split(".").pop();
-    previewSpan.textContent = `${finalNameParts.join("-")}.${fileExtension}`;
+    const finalNameWithExt = `${finalNameParts.join("-")}.${fileExtension}`;
+    previewSpan.textContent = finalNameWithExt;
+    helpCodificationState.finalName = finalNameWithExt;
     uploadBtn.disabled = !isFormValid;
   }
 
   async function handleFinalUpload(convention) {
-    const { file, selectedFolderId } = helpCodificationState;
+    // On récupère le nom final directement depuis l'état
+    const { file, selectedFolderId, finalName } = helpCodificationState;
+
     if (!file || !selectedFolderId) {
       alert("Veuillez sélectionner un fichier et un dossier de destination.");
       return;
     }
 
-    let finalFileName = file.name;
+    let finalFileNameToUpload = file.name; // Nom par défaut si pas de convention
+
     if (convention) {
-      const finalNamePreview =
-        document.getElementById("final-name-preview").textContent;
-      if (!finalNamePreview || document.querySelector(".invalid-input")) {
+      // On utilise directement la valeur de l'état, qui inclut l'extension
+      if (!finalName || document.querySelector(".invalid-input")) {
         alert("Le nom du fichier n'est pas valide ou complet.");
         return;
       }
-      finalFileName = finalNamePreview;
+      finalFileNameToUpload = finalName;
     }
 
     renderSaving(mainContentDiv);
-    const FinalNameTest = "test de nommage";
+
     try {
-      // Utilisation de notre nouvelle fonction robuste
       await uploadFileWithNewName(
         triconnectAPI,
         globalAccessToken,
         selectedFolderId,
-        file, // Le contenu original du fichier
-        FinalNameTest, // Le nouveau nom en tant que chaîne de caractères
-        file.type, // Le type MIME original
+        file, // Le contenu Blob du fichier
+        finalFileNameToUpload, // Le nom final (chaîne de caractères)
+        file.type, // Le type MIME
       );
-      console.log(
-        `le nom du fichier est ${finalFileName}...`,
-      );
+
       renderSuccess(
         mainContentDiv,
-        `Le fichier "${finalFileName}" a été déposé avec succès !`,
+        `Le fichier "${finalFileNameToUpload}" a été déposé avec succès !`,
       );
       setTimeout(handleHelpNamingClick, 2000);
     } catch (error) {
