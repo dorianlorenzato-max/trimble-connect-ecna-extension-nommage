@@ -418,7 +418,9 @@ import {
         triconnectAPI,
         globalAccessToken,
         selectedFolderId,
-        new File([file], finalFileName, { type: file.type }),
+        file, // Le contenu original du fichier
+        finalFileName, // Le nouveau nom en tant que chaîne de caractères
+        file.type, // Le type MIME original
       );
 
       renderSuccess(
