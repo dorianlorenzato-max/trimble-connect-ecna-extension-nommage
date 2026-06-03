@@ -487,17 +487,32 @@ async function fetchAllProjectFoldersWithDetails(triconnectAPI, accessToken) {
 }
 
 // FONCTION pour vérifier la permission d'un dossier
-async function checkFolderPermission(folderId, accessToken) {
+async function checkFolderPermission(folderId, accessToken, userId) {
   const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions`;
   try {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) return null;
-    const permissions = await response.json();
-    // L'API retourne un tableau, on prend la permission de l'utilisateur courant ('self')
-    const selfPermission = permissions.find((p) => p.type === "self");
-    return selfPermission ? selfPermission.role : null;
+
+    const permissionsData = await response.json();
+    const acl = permissionsData.acl;
+
+    // Si l'objet acl n'existe pas, on ne peut rien déterminer
+    if (!acl) return null;
+
+    // On vérifie si l'ID de l'utilisateur est dans la liste FULL_ACCESS
+    if (
+      acl.FULL_ACCESS &&
+      Array.isArray(acl.FULL_ACCESS) &&
+      acl.FULL_ACCESS.includes(userId)
+    ) {
+      return "full_access";
+    }
+
+    // On pourrait ajouter d'autres vérifications ici si nécessaire (ex: READ)
+    // Pour l'instant, si ce n'est pas full_access, on considère que ce n'est pas une cible.
+    return "read"; // On retourne 'read' pour indiquer un accès, mais pas total.
   } catch (error) {
     console.error(`Erreur de permission pour le dossier ${folderId}`, error);
     return null;
