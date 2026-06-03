@@ -155,6 +155,9 @@ import {
           triconnectAPI,
           globalAccessToken,
         );
+        console.log(
+          `1. Nombre total de dossiers trouvés dans le projet : ${allFolders.length}`,
+        );
         const foldersById = new Map(allFolders.map((f) => [f.id, f]));
         const currentUser = await fetchLoggedInUserDetails(globalAccessToken);
 
@@ -169,6 +172,9 @@ import {
             allowedTargetIds.add(allFolders[index].id);
           }
         });
+        console.log(
+          `3. Nombre de dossiers avec "full_access" trouvés : ${allowedTargetIds.size}`,
+        );
 
         // 3. Reconstruire l'arbre des chemins nécessaires
         const necessaryFolderIds = new Set();
@@ -180,7 +186,9 @@ import {
             currentId = folder ? folder.parentId : null;
           }
         }
-
+        console.log(
+          `4. Nombre de dossiers "nécessaires" (chemins + cibles) : ${necessaryFolderIds.size}`,
+        );
         necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
         folderPermissionCache = necessaryFoldersData; // Mettre en cache
       }
