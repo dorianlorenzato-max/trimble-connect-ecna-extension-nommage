@@ -642,3 +642,46 @@ body {
   border-radius: 4px;
   font-family: monospace;
 }
+
+/* --- STYLES POUR L'ARBORESCENCE AVEC PERMISSIONS --- */
+.folder-legend {
+  font-size: 0.8em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 10px;
+}
+.legend-item {
+  margin-right: 15px;
+  display: inline-flex;
+  align-items: center;
+}
+.color-box {
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border: 1px solid #ccc;
+}
+.color-box.allowed {
+  background-color: #196f3d;
+} /* Vert foncé */
+.color-box.path {
+  background-color: #d17524;
+} /* Orange-marron */
+
+.folder-item.allowed-folder > .folder-name {
+  font-weight: bold;
+  color: #196f3d; /* Vert foncé */
+}
+.folder-item.path-folder > .folder-name {
+  color: #af601a; /* Orange-marron */
+}
+/* On retire l'icône de dossier pour utiliser un simple triangle de dépliement */
+.folder-item .folder-name::before {
+  content: "";
+  margin-right: 0;
+}
+.expander {
+  cursor: pointer;
+  font-size: 0.8em;
+  margin-right: 5px;
+}
