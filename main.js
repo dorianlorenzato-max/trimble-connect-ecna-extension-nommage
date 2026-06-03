@@ -106,17 +106,9 @@ import {
       .getElementById("configNamingBtn")
       .addEventListener("click", handleConfigNamingRuleClick);
 
-    // Afficher la page d'accueil et attacher les événements des boutons de la page
-    renderHomePageWithButtons(mainContentDiv, isAdmin);
-    document
-      .getElementById("homeHelpNamingBtn")
-      .addEventListener("click", handleHelpNamingClick);
-    document
-      .getElementById("homeControlNamingBtn")
-      .addEventListener("click", handleControlNamingClick);
-    document
-      .getElementById("homeConfigNamingBtn")
-      .addEventListener("click", handleConfigNamingRuleClick);
+    // Affiche directement la page d'aide à la codification au démarrage
+    handleHelpNamingClick();
+    
   } catch (error) {
     console.error(
       "Erreur critique lors de l'initialisation de l'extension :",
@@ -409,7 +401,8 @@ import {
 
   async function handleFinalUpload() {
     // On récupère TOUT depuis l'état au moment du clic
-    const { file, selectedFolderId, finalName, convention } = helpCodificationState;
+    const { file, selectedFolderId, finalName, convention } =
+      helpCodificationState;
 
     if (!file || !selectedFolderId) {
       alert("Veuillez sélectionner un fichier et un dossier de destination.");
@@ -419,7 +412,7 @@ import {
     let finalFileNameToUpload = file.name;
 
     if (convention) {
-      if (!finalName || document.querySelector('.invalid-input')) {
+      if (!finalName || document.querySelector(".invalid-input")) {
         alert("Le nom du fichier n'est pas valide ou complet.");
         return;
       }
@@ -427,7 +420,7 @@ import {
     }
 
     renderSaving(mainContentDiv);
-    
+
     try {
       await uploadFileWithNewName(
         triconnectAPI,
@@ -435,7 +428,7 @@ import {
         selectedFolderId,
         file,
         finalFileNameToUpload,
-        file.type
+        file.type,
       );
 
       renderSuccess(
@@ -443,7 +436,6 @@ import {
         `Le fichier "${finalFileNameToUpload}" a été déposé avec succès !`,
       );
       setTimeout(handleHelpNamingClick, 2000);
-
     } catch (error) {
       console.error("Erreur lors du dépôt du fichier :", error);
       renderError(mainContentDiv, error);
