@@ -487,8 +487,10 @@ async function fetchAllProjectFoldersWithDetails(triconnectAPI, accessToken) {
 }
 
 // FONCTION pour vérifier la permission d'un dossier
-async function checkFolderPermission(folderId, accessToken, userId) {
-  const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions`;
+async function checkFolderPermission(folderId, accessToken, userFimId) {
+  // On ajoute le paramètre 'fields=inherited' à l'URL
+  const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions?fields=inherited`;
+
   try {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -496,27 +498,54 @@ async function checkFolderPermission(folderId, accessToken, userId) {
     if (!response.ok) return null;
 
     const permissionsData = await response.json();
-    const acl = permissionsData.acl;
-    console.log(`2. Permissions pour le dossier ${folderId}:`, permissionsData);
-    console.log(`... ID utilisateur recherché : ${userId}`);
 
-    // Si l'objet acl n'existe pas, on ne peut rien déterminer
-    if (!acl) console.log(`... Rôle déduit : null (pas d'ACL)`);
-    return null;
+    // On cible directement l'objet des permissions héritées, qui est le plus pertinent
+    const acl = permissionsData.inheritedPermissions?.acl;
 
-    // On vérifie si l'ID de l'utilisateur est dans la liste FULL_ACCESS
+    if (!acl) {
+      // Si pas de permissions héritées, on vérifie les permissions directes en fallback
+      const directAcl = permissionsData.directPermissions?.acl;
+      if (!directAcl) return null;
+
+      // On refait la vérification sur les droits directs
+      if (
+        directAcl.FULL_ACCESS &&
+        Array.isArray(directAcl.FULL_ACCESS) &&
+        directAcl.FULL_ACCESS.includes(userFimId)
+      ) {
+        return "full_access";
+      }
+      if (
+        directAcl.READ &&
+        Array.isArray(directAcl.READ) &&
+        directAcl.READ.includes(userFimId)
+      ) {
+        return "read";
+      }
+      return null;
+    }
+
+    // Le cas principal : vérifier les droits dans les permissions héritées
     if (
       acl.FULL_ACCESS &&
       Array.isArray(acl.FULL_ACCESS) &&
-      acl.FULL_ACCESS.includes(userId)
+      (acl.FULL_ACCESS.includes(userFimId) ||
+        acl.FULL_ACCESS.includes("tc-groups:*"))
     ) {
-      console.log(`... Rôle déduit : full_access`);
       return "full_access";
     }
 
-    // On pourrait ajouter d'autres vérifications ici si nécessaire (ex: READ)
-    // Pour l'instant, si ce n'est pas full_access, on considère que ce n'est pas une cible.
-    return "read"; // On retourne 'read' pour indiquer un accès, mais pas total.
+    if (
+      (acl.READ &&
+        Array.isArray(acl.READ) &&
+        (acl.READ.includes(userFimId) || acl.READ.includes("tc-groups:*"))) ||
+      (acl.FULL_ACCESS && Array.isArray(acl.FULL_ACCESS))
+    ) // Si FULL_ACCESS existe, on a forcément le droit de lecture
+    {
+      return "read";
+    }
+
+    return null;
   } catch (error) {
     console.error(`Erreur de permission pour le dossier ${folderId}`, error);
     return null;
