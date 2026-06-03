@@ -451,7 +451,58 @@ async function fetchAllControlledDocuments(
 
   return allDocuments;
 }
+//  FONCTION pour récupérer tous les dossiers avec leurs détails (id, name, parentId)
+async function fetchAllProjectFoldersWithDetails(triconnectAPI, accessToken) {
+  const rootId = await getProjectRootId(triconnectAPI, accessToken);
+  const allFolders = [];
+  const foldersToScan = [rootId];
+  const scannedIds = new Set();
 
+  while (foldersToScan.length > 0) {
+    const currentFolderId = foldersToScan.shift();
+    if (scannedIds.has(currentFolderId)) continue;
+    scannedIds.add(currentFolderId);
+
+    try {
+      const folderContents = await fetchFolderContents(
+        currentFolderId,
+        accessToken,
+      );
+      for (const folder of folderContents) {
+        allFolders.push({
+          id: folder.id,
+          name: folder.name,
+          parentId: currentFolderId,
+        });
+        foldersToScan.push(folder.id);
+      }
+    } catch (error) {
+      console.warn(
+        `Impossible de scanner le dossier ${currentFolderId}.`,
+        error,
+      );
+    }
+  }
+  return allFolders;
+}
+
+// FONCTION pour vérifier la permission d'un dossier
+async function checkFolderPermission(folderId, accessToken) {
+  const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions`;
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return null;
+    const permissions = await response.json();
+    // L'API retourne un tableau, on prend la permission de l'utilisateur courant ('self')
+    const selfPermission = permissions.find((p) => p.type === "self");
+    return selfPermission ? selfPermission.role : null;
+  } catch (error) {
+    console.error(`Erreur de permission pour le dossier ${folderId}`, error);
+    return null;
+  }
+}
 async function uploadFileWithNewName(
   triconnectAPI,
   accessToken,
@@ -537,4 +588,6 @@ export {
   getUsersToGroupsMap,
   fetchAllControlledDocuments,
   uploadFileWithNewName,
+  fetchAllProjectFoldersWithDetails,
+  checkFolderPermission,
 };
