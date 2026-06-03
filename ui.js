@@ -644,6 +644,10 @@ function renderHelpCodificationPage(container) {
 
       <!-- Arborescence des dossiers -->
       <div class="folder-browser-container">
+        <div class="folder-legend">
+          <span class="legend-item"><span class="color-box allowed"></span> Dossier de dépôt autorisé</span>
+          <span class="legend-item"><span class="color-box path"></span> Chemin d'accès</span>
+        </div>
         <ul id="folder-tree-root" class="folder-tree">
           <li>Chargement des dossiers...</li>
         </ul>
