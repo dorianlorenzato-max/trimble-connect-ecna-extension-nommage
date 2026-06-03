@@ -411,7 +411,7 @@ import {
     }
 
     renderSaving(mainContentDiv);
-
+    const FinalNameTest = "test de nommage";
     try {
       // Utilisation de notre nouvelle fonction robuste
       await uploadFileWithNewName(
@@ -419,10 +419,12 @@ import {
         globalAccessToken,
         selectedFolderId,
         file, // Le contenu original du fichier
-        finalFileName, // Le nouveau nom en tant que chaîne de caractères
+        FinalNameTest, // Le nouveau nom en tant que chaîne de caractères
         file.type, // Le type MIME original
       );
-
+      console.log(
+        `le nom du fichier est ${finalFileName}...`,
+      );
       renderSuccess(
         mainContentDiv,
         `Le fichier "${finalFileName}" a été déposé avec succès !`,
