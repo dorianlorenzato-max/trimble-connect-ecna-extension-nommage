@@ -49,6 +49,7 @@ import {
     file: null,
     selectedFolderId: null,
     finalName: null,
+    convention: null,
   };
 
   // ==================================================================
@@ -137,6 +138,7 @@ import {
         file: null,
         selectedFolderId: null,
         finalName: null,
+        convention: null,
       };
       renderHelpCodificationPage(mainContentDiv);
       attachHelpPageListeners();
@@ -256,6 +258,8 @@ import {
       if (e.dataTransfer.files.length > 0)
         handleFileSelected(e.dataTransfer.files[0]);
     });
+    const uploadBtn = document.getElementById("upload-document-btn");
+    uploadBtn.addEventListener("click", handleFinalUpload);
   }
 
   function handleFileSelected(file) {
@@ -335,13 +339,13 @@ import {
         ? assignmentsConfig[selectedFolderId]
         : null;
 
-      uploadBtn.onclick = null; // Important: réinitialiser l'événement précédent
+      //uploadBtn.onclick = null; // Important: réinitialiser l'événement précédent
 
       if (!conventionName) {
         namingZoneContainer.innerHTML =
           '<p style="font-style: italic;">Pas de nommage spécifique attendu pour ce dossier.</p>';
         uploadBtn.disabled = false;
-        uploadBtn.addEventListener("click", () => handleFinalUpload(null));
+        //uploadBtn.addEventListener("click", () => handleFinalUpload(null));
         return;
       }
 
@@ -359,7 +363,8 @@ import {
       renderNamingZone(namingZoneContainer, convention);
       attachNamingZoneListeners(convention);
       uploadBtn.disabled = false;
-      uploadBtn.addEventListener("click", () => handleFinalUpload(convention));
+      helpCodificationState.convention = convention;
+      //uploadBtn.addEventListener("click", () => handleFinalUpload(convention));
     } catch (error) {
       console.error(
         "Erreur lors de l'affichage de la zone de nommage :",
@@ -402,20 +407,19 @@ import {
     uploadBtn.disabled = !isFormValid;
   }
 
-  async function handleFinalUpload(convention) {
-    // On récupère le nom final directement depuis l'état
-    const { file, selectedFolderId, finalName } = helpCodificationState;
+  async function handleFinalUpload() {
+    // On récupère TOUT depuis l'état au moment du clic
+    const { file, selectedFolderId, finalName, convention } = helpCodificationState;
 
     if (!file || !selectedFolderId) {
       alert("Veuillez sélectionner un fichier et un dossier de destination.");
       return;
     }
 
-    let finalFileNameToUpload = file.name; // Nom par défaut si pas de convention
+    let finalFileNameToUpload = file.name;
 
     if (convention) {
-      // On utilise directement la valeur de l'état, qui inclut l'extension
-      if (!finalName || document.querySelector(".invalid-input")) {
+      if (!finalName || document.querySelector('.invalid-input')) {
         alert("Le nom du fichier n'est pas valide ou complet.");
         return;
       }
@@ -423,15 +427,15 @@ import {
     }
 
     renderSaving(mainContentDiv);
-
+    
     try {
       await uploadFileWithNewName(
         triconnectAPI,
         globalAccessToken,
         selectedFolderId,
-        file, // Le contenu Blob du fichier
-        finalFileNameToUpload, // Le nom final (chaîne de caractères)
-        file.type, // Le type MIME
+        file,
+        finalFileNameToUpload,
+        file.type
       );
 
       renderSuccess(
@@ -439,6 +443,7 @@ import {
         `Le fichier "${finalFileNameToUpload}" a été déposé avec succès !`,
       );
       setTimeout(handleHelpNamingClick, 2000);
+
     } catch (error) {
       console.error("Erreur lors du dépôt du fichier :", error);
       renderError(mainContentDiv, error);
