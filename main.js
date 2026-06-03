@@ -156,10 +156,11 @@ import {
           globalAccessToken,
         );
         const foldersById = new Map(allFolders.map((f) => [f.id, f]));
+        const currentUser = await fetchLoggedInUserDetails(globalAccessToken);
 
         // 2. Identifier les cibles autorisées
         const permissionChecks = allFolders.map((f) =>
-          checkFolderPermission(f.id, globalAccessToken),
+          checkFolderPermission(f.id, globalAccessToken, currentUser.id),
         );
         const results = await Promise.all(permissionChecks);
         const allowedTargetIds = new Set();
