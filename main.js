@@ -561,7 +561,8 @@ import {
       finalNameParts.push(value);
     });
     const fileExtension = helpCodificationState.file.name.split(".").pop();
-    const finalNameWithExt = `${finalNameParts.join("-")}.${fileExtension}`;
+    const finalName = finalNameParts.filter((part) => part !== "").join("-");
+    const finalNameWithExt = `${finalName}.${fileExtension}`;
     previewSpan.textContent = finalNameWithExt;
     helpCodificationState.finalName = finalNameWithExt;
     uploadBtn.disabled = !isFormValid;
