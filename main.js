@@ -155,6 +155,9 @@ import {
           fetchProjectGroups(currentProjectId, globalAccessToken),
           fetchLoggedInUserDetails(globalAccessToken),
         ]);
+        console.log(
+          `1. Nombre total de dossiers trouvés : ${allFolders.length}`,
+        );
 
         const foldersById = new Map(allFolders.map((f) => [f.id, f]));
         const userFimId = currentUser.id;
@@ -164,7 +167,9 @@ import {
         const allProjectMembersGroupId = allProjectMembersGroup
           ? allProjectMembersGroup.id
           : null;
-
+        console.log(
+          `2. ID utilisateur: ${userFimId}, ID groupe "Tous les membres": ${allProjectMembersGroupId}`,
+        );
         // Trouver les groupes de l'utilisateur
         const userGroupIds = [];
         for (const group of allProjectGroups) {
@@ -173,11 +178,16 @@ import {
             `https://app21.connect.trimble.com/tc/api/2.0/groups/${group.id}/users`,
             { headers: { Authorization: `Bearer ${globalAccessToken}` } },
           ).then((res) => res.json());
-          if (usersInGroup.some((u) => u.identity && u.identity.id === userFimId)) {
+          if (
+            usersInGroup.some((u) => u.identity && u.identity.id === userFimId)
+          ) {
             userGroupIds.push(group.id);
           }
         }
-
+        console.log(
+          `3. IDs des groupes de l'utilisateur (hors "Tous les membres") :`,
+          userGroupIds,
+        );
         // --- ÉTAPE 2 : IDENTIFIER LES CIBLES ET CHEMINS ---
         const permissionChecks = allFolders.map((f) =>
           checkFolderPermission(
@@ -202,9 +212,15 @@ import {
             readablePathIds.add(folderId);
           }
         });
-
+        console.log(
+          `4. Dossiers "full_access" trouvés : ${allowedTargetIds.size}`,
+        );
+        console.log(
+          `5. Dossiers "lisibles" trouvés (chemins + cibles) : ${readablePathIds.size}`,
+        );
         // --- ÉTAPE 3 : RECONSTRUIRE L'ARBRE ---
         const necessaryFolderIds = new Set();
+        console.log("6. Début de la reconstruction des chemins...");
         for (const targetId of allowedTargetIds) {
           let currentId = targetId;
           while (currentId && foldersById.has(currentId)) {
@@ -217,10 +233,24 @@ import {
               const folder = foldersById.get(currentId);
               currentId = folder ? folder.parentId : null;
             } else {
+              console.warn(
+                `   -> Remontée arrêtée à ${currentId} car il n'est pas dans la liste des dossiers lisibles.`,
+              );
               break; // Arrête la remontée si le parent n'est pas lisible
             }
           }
+          console.log(
+            `   -> Chemin reconstruit pour la cible "${path[0]}" : ${path.reverse().join(" / ")}`,
+          );
         }
+        console.log(
+          `7. Nombre final de dossiers "nécessaires" à afficher : ${necessaryFolderIds.size}`,
+        );
+        if (necessaryFolderIds.size > 0)
+          console.log(
+            "   -> IDs des dossiers à afficher :",
+            Array.from(necessaryFolderIds),
+          );
 
         necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
         folderPermissionCache = necessaryFoldersData;
@@ -231,12 +261,20 @@ import {
         triconnectAPI,
         globalAccessToken,
       );
+      console.log(
+        "8. Dossiers racines du projet (avant filtre) :",
+        rootFolders.map((f) => f.id),
+      );
       const treeRootElement = document.getElementById("folder-tree-root");
       treeRootElement.innerHTML = "";
 
       const filteredRootFolders = rootFolders.filter((f) =>
         necessaryFoldersData.necessaryFolderIds.has(f.id),
       );
+      console.log(
+        `9. Dossiers racines à afficher (après filtre) : ${filteredRootFolders.length}`,
+      );
+
       renderPermissionAwareFolderTree(
         treeRootElement,
         filteredRootFolders,
