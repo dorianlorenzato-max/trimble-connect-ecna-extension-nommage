@@ -737,13 +737,51 @@ function renderNamingZone(container, convention) {
 function renderEditColumnModal(columnData, onConfirmCallback) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-  modalOverlay.id = "edit-column-modal-overlay"; // ID différent pour éviter les conflits
+  modalOverlay.id = "edit-column-modal-overlay";
 
-  // --- Le HTML est presque identique à celui de l'ajout ---
+  // --- HTML COMPLET DE LA MODALE ---
   modalOverlay.innerHTML = `
     <div class="modal-content">
         <h2>Modifier la colonne</h2>
-        <!-- ... (le reste du HTML de la modale est identique à renderAddColumnModal) ... -->
+
+        <div class="modal-form-grid">
+            <div class="form-group">
+                <label for="column-name">Nom de la colonne</label>
+                <input type="text" id="column-name" placeholder="Ex: Phase">
+            </div>
+
+            <div class="form-group">
+                <label>Type de données</label>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="column-type" value="text"> Texte libre</label>
+                    <label><input type="radio" name="column-type" value="list"> Liste</label>
+                    <label><input type="radio" name="column-type" value="number1"> 1 chiffre</label>
+                    <label><input type="radio" name="column-type" value="number2"> 2 chiffres</label>
+                    <label><input type="radio" name="column-type" value="number3"> 3 chiffres</label>
+                    <label><input type="radio" name="column-type" value="trigram"> Trigramme</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Obligatoire</label>
+                <div class="checkbox-group">
+                    <label><input type="radio" name="column-required" value="yes"> Oui</label>
+                    <label><input type="radio" name="column-required" value="no"> Non</label>
+                </div>
+            </div>
+        </div>
+
+        <div id="list-values-section" class="form-section" style="display: none;">
+            <h4>Valeurs de la liste</h4>
+            <div class="list-values-table-wrapper">
+                <table id="list-values-table">
+                    <thead><tr><th>Valeur</th><th>Description</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+             <button id="add-list-row-btn" class="button-secondary button-small">Ajouter une ligne</button>
+        </div>
+
         <div class="modal-actions">
             <button id="cancel-edit-column-btn" class="button-secondary">Annuler</button>
             <button id="confirm-edit-column-btn" class="button-primary">Appliquer les modifications</button>
@@ -781,7 +819,7 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
     }
   }
 
-  // --- LOGIQUE DES ÉVÉNEMENTS (identique à renderAddColumnModal, mais avec des ID différents) ---
+  // --- LOGIQUE DES ÉVÉNEMENTS ---
   const closeModal = () => modalOverlay.remove();
   modalOverlay
     .querySelector("#cancel-edit-column-btn")
@@ -809,8 +847,34 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
   modalOverlay
     .querySelector("#confirm-edit-column-btn")
     .addEventListener("click", () => {
-      // ... (La logique de lecture des données et d'appel du callback est identique à celle de renderAddColumnModal)
-      onConfirmCallback(updatedColumn); // Appelle le onColumnEdit
+      const name = modalOverlay.querySelector("#column-name").value.trim();
+      if (!name) {
+        alert("Veuillez donner un nom à la colonne.");
+        return;
+      }
+      const type = modalOverlay.querySelector(
+        'input[name="column-type"]:checked',
+      ).value;
+      const isRequired =
+        modalOverlay.querySelector('input[name="column-required"]:checked')
+          .value === "yes";
+      let values = [];
+      if (type === "list") {
+        modalOverlay
+          .querySelectorAll("#list-values-table tbody tr")
+          .forEach((row) => {
+            const valueInput = row.cells[0].querySelector("input");
+            const descInput = row.cells[1].querySelector("input");
+            if (valueInput.value.trim()) {
+              values.push({
+                value: valueInput.value.trim(),
+                description: descInput.value.trim(),
+              });
+            }
+          });
+      }
+      const updatedColumn = { name, type, required: isRequired, values };
+      onConfirmCallback(updatedColumn);
       closeModal();
     });
 }
