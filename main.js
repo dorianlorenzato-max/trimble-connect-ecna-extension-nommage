@@ -157,7 +157,7 @@ import {
         ]);
 
         const foldersById = new Map(allFolders.map((f) => [f.id, f]));
-        const userFimId = currentUser.identity.id;
+        const userFimId = currentUser.id;
         const allProjectMembersGroup = allProjectGroups.find(
           (g) => g.name === "All Project Members",
         );
