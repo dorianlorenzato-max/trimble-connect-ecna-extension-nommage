@@ -685,3 +685,14 @@ body {
   font-size: 0.8em;
   margin-right: 5px;
 }
+.clickable-header {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.clickable-header:hover {
+  background-color: #e0eaf0 !important;
+}
+.clickable-header.selected {
+  background-color: #cce5ff !important;
+  box-shadow: inset 0 0 0 2px #007bff;
+}
