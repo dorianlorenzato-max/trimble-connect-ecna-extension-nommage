@@ -184,14 +184,12 @@ import {
         const necessaryFolderIds = new Set();
         console.log("4. Début de la reconstruction des chemins...");
         for (const targetId of allowedTargetIds) {
-          let path = [];
           let currentId = targetId;
           while (currentId && !necessaryFolderIds.has(currentId)) {
             necessaryFolderIds.add(currentId);
             const folder = foldersById.get(currentId);
             currentId = folder ? folder.parentId : null;
           }
-          console.log(`      - Chemin trouvé : ${path.reverse().join(" / ")}`);
         }
         console.log(
           `4. Nombre de dossiers "nécessaires" (chemins + cibles) : ${necessaryFolderIds.size}`,
