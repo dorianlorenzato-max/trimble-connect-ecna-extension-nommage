@@ -184,6 +184,7 @@ import {
         const necessaryFolderIds = new Set();
         console.log("4. Début de la reconstruction des chemins...");
         for (const targetId of allowedTargetIds) {
+          let path = [];
           let currentId = targetId;
           while (currentId && !necessaryFolderIds.has(currentId)) {
             necessaryFolderIds.add(currentId);
