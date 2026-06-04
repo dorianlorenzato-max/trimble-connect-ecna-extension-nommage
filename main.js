@@ -175,9 +175,14 @@ import {
         console.log(
           `3. Nombre de dossiers avec "full_access" trouvés : ${allowedTargetIds.size}`,
         );
+        console.log(
+          "   -> IDs des dossiers autorisés :",
+          Array.from(allowedTargetIds),
+        );
 
         // 3. Reconstruire l'arbre des chemins nécessaires
         const necessaryFolderIds = new Set();
+        console.log("4. Début de la reconstruction des chemins...");
         for (const targetId of allowedTargetIds) {
           let currentId = targetId;
           while (currentId && !necessaryFolderIds.has(currentId)) {
@@ -185,9 +190,14 @@ import {
             const folder = foldersById.get(currentId);
             currentId = folder ? folder.parentId : null;
           }
+          console.log(`      - Chemin trouvé : ${path.reverse().join(" / ")}`);
         }
         console.log(
           `4. Nombre de dossiers "nécessaires" (chemins + cibles) : ${necessaryFolderIds.size}`,
+        );
+        console.log(
+          "   -> IDs des dossiers nécessaires :",
+          Array.from(necessaryFolderIds),
         );
         necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
         folderPermissionCache = necessaryFoldersData; // Mettre en cache
@@ -200,9 +210,16 @@ import {
       );
       const treeRootElement = document.getElementById("folder-tree-root");
       treeRootElement.innerHTML = ""; // Vider le message de chargement
-
+      console.log(
+        "6. Dossiers racines du projet :",
+        rootFolders.map((f) => ({ name: f.name, id: f.id })),
+      );
       const filteredRootFolders = rootFolders.filter((f) =>
         necessaryFoldersData.necessaryFolderIds.has(f.id),
+      );
+      console.log(
+        "7. Dossiers racines conservés après filtrage :",
+        filteredRootFolders.map((f) => f.name),
       );
       renderPermissionAwareFolderTree(
         treeRootElement,
