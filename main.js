@@ -149,82 +149,66 @@ import {
         if (loadingText)
           loadingText.textContent = "Analyse des permissions en cours...";
 
-        // --- ÉTAPE 1 : PRÉ-CALCUL DES IDENTIFIANTS ---
         const [allFolders, allProjectGroups, currentUser] = await Promise.all([
           fetchAllProjectFoldersWithDetails(triconnectAPI, globalAccessToken),
           fetchProjectGroups(currentProjectId, globalAccessToken),
           fetchLoggedInUserDetails(globalAccessToken),
         ]);
         console.log(
-          `1. Nombre total de dossiers trouvés : ${allFolders.length}`,
+          `1. Nombre total de dossiers à analyser : ${allFolders.length}`,
         );
-
         const foldersById = new Map(allFolders.map((f) => [f.id, f]));
-        const userFimId = currentUser.id;
-        const allProjectMembersGroup = allProjectGroups.find(
-          (g) => g.name === "All Project Members",
-        );
-        const allProjectMembersGroupId = allProjectMembersGroup
-          ? allProjectMembersGroup.id
-          : null;
-        console.log(
-          `2. ID utilisateur: ${userFimId}, ID groupe "Tous les membres": ${allProjectMembersGroupId}`,
-        );
+        const currentUserId = currentUser.id; // C'est l'ID que nous allons comparer
+
         // Trouver les groupes de l'utilisateur
         const userGroupIds = [];
         for (const group of allProjectGroups) {
-          if (group.id === allProjectMembersGroupId) continue; // On le traite séparément
           const usersInGroup = await fetch(
             `https://app21.connect.trimble.com/tc/api/2.0/groups/${group.id}/users`,
             { headers: { Authorization: `Bearer ${globalAccessToken}` } },
           ).then((res) => res.json());
-          if (
-            usersInGroup.some((u) => u.identity && u.identity.id === userFimId)
-          ) {
+
+          if (usersInGroup.some((u) => u.id === currentUserId)) {
             userGroupIds.push(group.id);
           }
         }
         console.log(
-          `3. IDs des groupes de l'utilisateur (hors "Tous les membres") :`,
+          `2. IDs des groupes de l'utilisateur trouvés :`,
           userGroupIds,
         );
-        // --- ÉTAPE 2 : IDENTIFIER LES CIBLES ET CHEMINS ---
+        // --- ÉTAPE 2 : IDENTIFIER LES CIBLES ET CHEMINS---
         const permissionChecks = allFolders.map((f) =>
           checkFolderPermission(
             f.id,
             globalAccessToken,
-            userFimId,
+            currentUserId,
             userGroupIds,
-            allProjectMembersGroupId,
           ),
         );
         const results = await Promise.all(permissionChecks);
 
         const allowedTargetIds = new Set();
         const readablePathIds = new Set();
-
         results.forEach((role, index) => {
           const folderId = allFolders[index].id;
           if (role === "full_access") {
             allowedTargetIds.add(folderId);
-            readablePathIds.add(folderId); // Un dossier "full_access" est aussi lisible
+            readablePathIds.add(folderId);
           } else if (role === "read") {
             readablePathIds.add(folderId);
           }
         });
         console.log(
-          `4. Dossiers "full_access" trouvés : ${allowedTargetIds.size}`,
+          `3. Nombre de dossiers "full_access" identifiés : ${allowedTargetIds.size}`,
         );
         console.log(
-          `5. Dossiers "lisibles" trouvés (chemins + cibles) : ${readablePathIds.size}`,
+          `4. Nombre total de dossiers "lisibles" (chemins + cibles) : ${readablePathIds.size}`,
         );
         // --- ÉTAPE 3 : RECONSTRUIRE L'ARBRE ---
         const necessaryFolderIds = new Set();
-        console.log("6. Début de la reconstruction des chemins...");
         for (const targetId of allowedTargetIds) {
           let currentId = targetId;
           while (currentId && foldersById.has(currentId)) {
-            // On ajoute un parent seulement s'il est lisible ET pas déjà dans la liste
             if (
               readablePathIds.has(currentId) &&
               !necessaryFolderIds.has(currentId)
@@ -233,48 +217,34 @@ import {
               const folder = foldersById.get(currentId);
               currentId = folder ? folder.parentId : null;
             } else {
-              console.warn(
-                `   -> Remontée arrêtée à ${currentId} car il n'est pas dans la liste des dossiers lisibles.`,
-              );
-              break; // Arrête la remontée si le parent n'est pas lisible
+              break;
             }
           }
-          console.log(
-            `   -> Chemin reconstruit pour la cible "${path[0]}" : ${path.reverse().join(" / ")}`,
-          );
         }
         console.log(
-          `7. Nombre final de dossiers "nécessaires" à afficher : ${necessaryFolderIds.size}`,
+          `5. Nombre final de dossiers "nécessaires" à afficher : ${necessaryFolderIds.size}`,
         );
-        if (necessaryFolderIds.size > 0)
-          console.log(
-            "   -> IDs des dossiers à afficher :",
-            Array.from(necessaryFolderIds),
-          );
-
         necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
         folderPermissionCache = necessaryFoldersData;
       }
-
       // --- ÉTAPE 4 : AFFICHER ---
       const rootFolders = await getRootFolders(
         triconnectAPI,
         globalAccessToken,
       );
       console.log(
-        "8. Dossiers racines du projet (avant filtre) :",
-        rootFolders.map((f) => f.id),
+        "6. Dossiers racines du projet (avant filtre) :",
+        rootFolders.map((f) => f.name),
       );
       const treeRootElement = document.getElementById("folder-tree-root");
       treeRootElement.innerHTML = "";
-
       const filteredRootFolders = rootFolders.filter((f) =>
         necessaryFoldersData.necessaryFolderIds.has(f.id),
       );
       console.log(
-        `9. Dossiers racines à afficher (après filtre) : ${filteredRootFolders.length}`,
+        "7. Dossiers racines affichés (après filtre) :",
+        filteredRootFolders.map((f) => f.name),
       );
-
       renderPermissionAwareFolderTree(
         treeRootElement,
         filteredRootFolders,
