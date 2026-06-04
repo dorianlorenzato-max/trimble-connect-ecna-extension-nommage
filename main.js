@@ -32,6 +32,7 @@ import {
   renderControlPage,
   renderHelpCodificationPage,
   renderNamingZone,
+  renderEditColumnModal,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -682,6 +683,7 @@ import {
       name: "",
       columns: [],
       editMode: "normal",
+      selectedColumnIndex: null,
     };
 
     // Premier affichage de la page
@@ -1235,6 +1237,7 @@ import {
         name: ruleToEdit.name,
         columns: ruleToEdit.columns,
         editMode: "normal",
+        selectedColumnIndex: null,
       };
 
       // On affiche la page de création/édition
@@ -1299,7 +1302,19 @@ import {
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     attachCreatePageListeners();
   };
+  const onColumnEdit = (updatedColumn) => {
+    if (currentRuleState.selectedColumnIndex === null) return;
 
+    // On remplace l'ancienne colonne par la nouvelle à l'index sélectionné
+    currentRuleState.columns.splice(
+      currentRuleState.selectedColumnIndex,
+      1,
+      updatedColumn,
+    );
+
+    currentRuleState.selectedColumnIndex = null; // On désélectionne après modification
+    rerenderPage();
+  };
   function attachCreatePageListeners() {
     document
       .getElementById("cancel-naming-rule-btn")
@@ -1312,7 +1327,32 @@ import {
       currentRuleState.name = document.getElementById("naming-rule-name").value;
       renderAddColumnModal(onColumnAdd);
     });
+    // Logique pour le nouveau bouton "Modifier"
+    const editBtn = document.getElementById("edit-column-btn");
+    if (editBtn) {
+      // Le bouton n'existe que si des colonnes sont présentes
+      editBtn.addEventListener("click", () => {
+        if (currentRuleState.selectedColumnIndex === null) return;
+        currentRuleState.name =
+          document.getElementById("naming-rule-name").value;
+        const columnToEdit =
+          currentRuleState.columns[currentRuleState.selectedColumnIndex];
+        renderEditColumnModal(columnToEdit, onColumnEdit);
+      });
+    }
 
+    // Logique pour rendre les en-têtes cliquables
+    document.querySelectorAll(".clickable-header").forEach((header, index) => {
+      header.addEventListener("click", () => {
+        // Si on clique sur la colonne déjà sélectionnée, on la désélectionne
+        if (currentRuleState.selectedColumnIndex === index) {
+          currentRuleState.selectedColumnIndex = null;
+        } else {
+          currentRuleState.selectedColumnIndex = index;
+        }
+        rerenderPage(); // On redessine pour mettre à jour l'affichage
+      });
+    });
     const reorderBtn = document.getElementById("reorder-columns-btn");
     const deleteBtn = document.getElementById("delete-column-mode-btn");
 
