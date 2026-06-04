@@ -487,64 +487,36 @@ async function fetchAllProjectFoldersWithDetails(triconnectAPI, accessToken) {
 }
 
 // FONCTION pour vérifier la permission d'un dossier
-async function checkFolderPermission(folderId, accessToken, userFimId) {
-  // On ajoute le paramètre 'fields=inherited' à l'URL
+async function checkFolderPermission(folderId, accessToken, userFimId, userGroupIds, allMembersGroupId) {
   const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions?fields=inherited`;
-
   try {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!response.ok) return null;
 
     const permissionsData = await response.json();
 
-    // On cible directement l'objet des permissions héritées, qui est le plus pertinent
-    const acl = permissionsData.inheritedPermissions?.acl;
-    console.log(`2. Permissions pour le dossier ${folderId}:`, permissionsData);
-    console.log(`... ID utilisateur recherché : ${userFimId}`);
-
-    if (!acl) {
-      // Si pas de permissions héritées, on vérifie les permissions directes en fallback
-      const directAcl = permissionsData.directPermissions?.acl;
-      if (!directAcl) return null;
-
-      // On refait la vérification sur les droits directs
-      if (
-        directAcl.FULL_ACCESS &&
-        Array.isArray(directAcl.FULL_ACCESS) &&
-        directAcl.FULL_ACCESS.includes(userFimId)
-      ) {
-        return "full_access";
+    // Fonction aide interne pour vérifier une liste de permissions
+    const hasAccess = (acl, permissionType) => {
+      if (!acl || !acl[permissionType] || !Array.isArray(acl[permissionType])) {
+        return false;
       }
-      if (
-        directAcl.READ &&
-        Array.isArray(directAcl.READ) &&
-        directAcl.READ.includes(userFimId)
-      ) {
-        return "read";
-      }
-      return null;
+      const aclList = acl[permissionType];
+      return aclList.includes(userFimId) || 
+             aclList.includes(allMembersGroupId) ||
+             userGroupIds.some(groupId => aclList.includes(`tc-groups:${groupId}`)); // L'API préfixe les ID de groupe
+    };
+
+    const inheritedAcl = permissionsData.inheritedPermissions?.acl;
+    const directAcl = permissionsData.directPermissions?.acl;
+
+    // On vérifie le full_access en priorité
+    if (hasAccess(inheritedAcl, 'FULL_ACCESS') || hasAccess(directAcl, 'FULL_ACCESS')) {
+      return 'full_access';
     }
 
-    // Le cas principal : vérifier les droits dans les permissions héritées
-    if (
-      acl.FULL_ACCESS &&
-      Array.isArray(acl.FULL_ACCESS) &&
-      (acl.FULL_ACCESS.includes(userFimId) ||
-        acl.FULL_ACCESS.includes("tc-groups:*"))
-    ) {
-      return "full_access";
-    }
-
-    if (
-      (acl.READ &&
-        Array.isArray(acl.READ) &&
-        (acl.READ.includes(userFimId) || acl.READ.includes("tc-groups:*"))) ||
-      (acl.FULL_ACCESS && Array.isArray(acl.FULL_ACCESS))
-    ) // Si FULL_ACCESS existe, on a forcément le droit de lecture
-    {
-      return "read";
+    // Sinon, on vérifie le droit de lecture
+    if (hasAccess(inheritedAcl, 'READ') || hasAccess(directAcl, 'READ')) {
+      return 'read';
     }
 
     return null;
