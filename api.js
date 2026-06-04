@@ -501,6 +501,8 @@ async function checkFolderPermission(folderId, accessToken, userFimId) {
 
     // On cible directement l'objet des permissions héritées, qui est le plus pertinent
     const acl = permissionsData.inheritedPermissions?.acl;
+    console.log(`2. Permissions pour le dossier ${folderId}:`, permissionsData);
+    console.log(`... ID utilisateur recherché : ${userFimId}`);
 
     if (!acl) {
       // Si pas de permissions héritées, on vérifie les permissions directes en fallback
