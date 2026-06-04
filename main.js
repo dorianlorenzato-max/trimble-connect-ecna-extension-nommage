@@ -1331,29 +1331,35 @@ import {
     // Logique pour le nouveau bouton "Modifier"
     const editBtn = document.getElementById("edit-column-btn");
     if (editBtn) {
-      // Le bouton n'existe que si des colonnes sont présentes
       editBtn.addEventListener("click", () => {
-        if (currentRuleState.selectedColumnIndex === null) return;
-        currentRuleState.name =
-          document.getElementById("naming-rule-name").value;
-        const columnToEdit =
-          currentRuleState.columns[currentRuleState.selectedColumnIndex];
-        renderEditColumnModal(columnToEdit, onColumnEdit);
+        if (currentRuleState.columns.length === 0) {
+          alert("Veuillez d'abord ajouter une colonne.");
+          return;
+        }
+        // On entre ou on sort du mode de sélection
+        currentRuleState.editMode =
+          currentRuleState.editMode === "select_for_edit"
+            ? "normal"
+            : "select_for_edit";
+        rerenderPage();
       });
     }
-
     // Logique pour rendre les en-têtes cliquables
-    document.querySelectorAll(".clickable-header").forEach((header, index) => {
-      header.addEventListener("click", () => {
-        // Si on clique sur la colonne déjà sélectionnée, on la désélectionne
-        if (currentRuleState.selectedColumnIndex === index) {
-          currentRuleState.selectedColumnIndex = null;
-        } else {
-          currentRuleState.selectedColumnIndex = index;
-        }
-        rerenderPage(); // On redessine pour mettre à jour l'affichage
-      });
-    });
+    if (currentRuleState.editMode === "select_for_edit") {
+      document
+        .querySelectorAll(".clickable-header")
+        .forEach((header, index) => {
+          header.addEventListener("click", () => {
+            currentRuleState.selectedColumnIndex = index;
+            currentRuleState.name =
+              document.getElementById("naming-rule-name").value;
+            const columnToEdit = currentRuleState.columns[index];
+
+            // On affiche la modale d'édition et on lui passe le callback
+            renderEditColumnModal(columnToEdit, onColumnEdit);
+          });
+        });
+    }
     const reorderBtn = document.getElementById("reorder-columns-btn");
     const deleteBtn = document.getElementById("delete-column-mode-btn");
 
