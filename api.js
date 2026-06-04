@@ -487,36 +487,49 @@ async function fetchAllProjectFoldersWithDetails(triconnectAPI, accessToken) {
 }
 
 // FONCTION pour vérifier la permission d'un dossier
-async function checkFolderPermission(folderId, accessToken, userFimId, userGroupIds, allMembersGroupId) {
+async function checkFolderPermission(
+  folderId,
+  accessToken,
+  userId,
+  userGroupIds,
+) {
   const url = `https://app21.connect.trimble.com/tc/api/2.0/folders/fs/${folderId}/permissions?fields=inherited`;
   try {
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (!response.ok) return null;
 
     const permissionsData = await response.json();
+    console.log(
+      `--- Vérification Permission pour Dossier ${folderId} ---`,
+      permissionsData,
+    );
 
-    // Fonction aide interne pour vérifier une liste de permissions
     const hasAccess = (acl, permissionType) => {
       if (!acl || !acl[permissionType] || !Array.isArray(acl[permissionType])) {
         return false;
       }
       const aclList = acl[permissionType];
-      return aclList.includes(userFimId) || 
-             aclList.includes(allMembersGroupId) ||
-             userGroupIds.some(groupId => aclList.includes(`tc-groups:${groupId}`)); // L'API préfixe les ID de groupe
+      // On vérifie l'ID de l'utilisateur, OU "tous les groupes", OU l'un de ses groupes
+      return (
+        aclList.includes(userId) ||
+        aclList.includes("tc-groups:*") ||
+        userGroupIds.some((groupId) => aclList.includes(`tc-groups:${groupId}`))
+      );
     };
 
     const inheritedAcl = permissionsData.inheritedPermissions?.acl;
     const directAcl = permissionsData.directPermissions?.acl;
 
-    // On vérifie le full_access en priorité
-    if (hasAccess(inheritedAcl, 'FULL_ACCESS') || hasAccess(directAcl, 'FULL_ACCESS')) {
-      return 'full_access';
+    if (
+      hasAccess(inheritedAcl, "FULL_ACCESS") ||
+      hasAccess(directAcl, "FULL_ACCESS")
+    ) {
+      return "full_access";
     }
-
-    // Sinon, on vérifie le droit de lecture
-    if (hasAccess(inheritedAcl, 'READ') || hasAccess(directAcl, 'READ')) {
-      return 'read';
+    if (hasAccess(inheritedAcl, "READ") || hasAccess(directAcl, "READ")) {
+      return "read";
     }
 
     return null;
