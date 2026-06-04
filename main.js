@@ -173,7 +173,7 @@ import {
             `https://app21.connect.trimble.com/tc/api/2.0/groups/${group.id}/users`,
             { headers: { Authorization: `Bearer ${globalAccessToken}` } },
           ).then((res) => res.json());
-          if (usersInGroup.some((u) => u.identity.id === userFimId)) {
+          if (usersInGroup.some((u) => u.identity && u.identity.id === userFimId)) {
             userGroupIds.push(group.id);
           }
         }
