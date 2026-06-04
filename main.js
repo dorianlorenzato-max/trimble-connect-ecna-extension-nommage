@@ -128,103 +128,87 @@ import {
   async function handleHelpNamingClick() {
     renderLoading(mainContentDiv);
     try {
-      helpCodificationState = {
-        file: null,
-        selectedFolderId: null,
-        finalName: null,
-        convention: null,
-      };
+      helpCodificationState = { file: null, selectedFolderId: null, finalName: null, convention: null };
       renderHelpCodificationPage(mainContentDiv);
       attachHelpPageListeners();
 
       let necessaryFoldersData;
 
-      // Utiliser le cache si disponible
       if (folderPermissionCache) {
         necessaryFoldersData = folderPermissionCache;
       } else {
-        const loadingText = document
-          .getElementById("folder-tree-root")
-          .querySelector("li");
-        if (loadingText)
-          loadingText.textContent =
-            "Analyse des permissions en cours (cela peut prendre un moment)...";
+        const loadingText = document.getElementById('folder-tree-root').querySelector('li');
+        if (loadingText) loadingText.textContent = "Analyse des permissions en cours...";
 
-        // 1. Récupérer tous les dossiers
-        const allFolders = await fetchAllProjectFoldersWithDetails(
-          triconnectAPI,
-          globalAccessToken,
-        );
-        console.log(
-          `1. Nombre total de dossiers trouvés dans le projet : ${allFolders.length}`,
-        );
-        const foldersById = new Map(allFolders.map((f) => [f.id, f]));
-        const currentUser = await fetchLoggedInUserDetails(globalAccessToken);
+        // --- ÉTAPE 1 : PRÉ-CALCUL DES IDENTIFIANTS ---
+        const [allFolders, allProjectGroups, currentUser] = await Promise.all([
+          fetchAllProjectFoldersWithDetails(triconnectAPI, globalAccessToken),
+          fetchProjectGroups(currentProjectId, globalAccessToken),
+          fetchLoggedInUserDetails(globalAccessToken)
+        ]);
 
-        // 2. Identifier les cibles autorisées
-        const permissionChecks = allFolders.map((f) =>
-          checkFolderPermission(f.id, globalAccessToken, currentUser.id),
-        );
-        const results = await Promise.all(permissionChecks);
-        const allowedTargetIds = new Set();
-        results.forEach((role, index) => {
-          if (role === "full_access") {
-            allowedTargetIds.add(allFolders[index].id);
-          }
-        });
-        console.log(
-          `3. Nombre de dossiers avec "full_access" trouvés : ${allowedTargetIds.size}`,
-        );
-        console.log(
-          "   -> IDs des dossiers autorisés :",
-          Array.from(allowedTargetIds),
-        );
+        const foldersById = new Map(allFolders.map(f => [f.id, f]));
+        const userFimId = currentUser.identity.id;
+        const allProjectMembersGroup = allProjectGroups.find(g => g.name === 'All Project Members');
+        const allProjectMembersGroupId = allProjectMembersGroup ? allProjectMembersGroup.id : null;
 
-        // 3. Reconstruire l'arbre des chemins nécessaires
-        const necessaryFolderIds = new Set();
-        console.log("4. Début de la reconstruction des chemins...");
-        for (const targetId of allowedTargetIds) {
-          let currentId = targetId;
-          while (currentId && !necessaryFolderIds.has(currentId)) {
-            necessaryFolderIds.add(currentId);
-            const folder = foldersById.get(currentId);
-            currentId = folder ? folder.parentId : null;
+        // Trouver les groupes de l'utilisateur
+        const userGroupIds = [];
+        for (const group of allProjectGroups) {
+          if (group.id === allProjectMembersGroupId) continue; // On le traite séparément
+          const usersInGroup = await fetch(`https://app21.connect.trimble.com/tc/api/2.0/groups/${group.id}/users`, { headers: { Authorization: `Bearer ${globalAccessToken}` } }).then(res => res.json());
+          if (usersInGroup.some(u => u.identity.id === userFimId)) {
+            userGroupIds.push(group.id);
           }
         }
-        console.log(
-          `4. Nombre de dossiers "nécessaires" (chemins + cibles) : ${necessaryFolderIds.size}`,
+        
+        // --- ÉTAPE 2 : IDENTIFIER LES CIBLES ET CHEMINS ---
+        const permissionChecks = allFolders.map(f => 
+          checkFolderPermission(f.id, globalAccessToken, userFimId, userGroupIds, allProjectMembersGroupId)
         );
-        console.log(
-          "   -> IDs des dossiers nécessaires :",
-          Array.from(necessaryFolderIds),
-        );
+        const results = await Promise.all(permissionChecks);
+        
+        const allowedTargetIds = new Set();
+        const readablePathIds = new Set();
+
+        results.forEach((role, index) => {
+          const folderId = allFolders[index].id;
+          if (role === 'full_access') {
+            allowedTargetIds.add(folderId);
+            readablePathIds.add(folderId); // Un dossier "full_access" est aussi lisible
+          } else if (role === 'read') {
+            readablePathIds.add(folderId);
+          }
+        });
+
+        // --- ÉTAPE 3 : RECONSTRUIRE L'ARBRE ---
+        const necessaryFolderIds = new Set();
+        for (const targetId of allowedTargetIds) {
+          let currentId = targetId;
+          while (currentId && foldersById.has(currentId)) {
+            // On ajoute un parent seulement s'il est lisible ET pas déjà dans la liste
+            if (readablePathIds.has(currentId) && !necessaryFolderIds.has(currentId)) {
+              necessaryFolderIds.add(currentId);
+              const folder = foldersById.get(currentId);
+              currentId = folder ? folder.parentId : null;
+            } else {
+              break; // Arrête la remontée si le parent n'est pas lisible
+            }
+          }
+        }
+        
         necessaryFoldersData = { necessaryFolderIds, allowedTargetIds };
-        folderPermissionCache = necessaryFoldersData; // Mettre en cache
+        folderPermissionCache = necessaryFoldersData;
       }
 
-      // 4. Afficher l'arborescence filtrée
-      const rootFolders = await getRootFolders(
-        triconnectAPI,
-        globalAccessToken,
-      );
+      // --- ÉTAPE 4 : AFFICHER ---
+      const rootFolders = await getRootFolders(triconnectAPI, globalAccessToken);
       const treeRootElement = document.getElementById("folder-tree-root");
-      treeRootElement.innerHTML = ""; // Vider le message de chargement
-      console.log(
-        "6. Dossiers racines du projet :",
-        rootFolders.map((f) => ({ name: f.name, id: f.id })),
-      );
-      const filteredRootFolders = rootFolders.filter((f) =>
-        necessaryFoldersData.necessaryFolderIds.has(f.id),
-      );
-      console.log(
-        "7. Dossiers racines conservés après filtrage :",
-        filteredRootFolders.map((f) => f.name),
-      );
-      renderPermissionAwareFolderTree(
-        treeRootElement,
-        filteredRootFolders,
-        necessaryFoldersData,
-      );
+      treeRootElement.innerHTML = "";
+      
+      const filteredRootFolders = rootFolders.filter(f => necessaryFoldersData.necessaryFolderIds.has(f.id));
+      renderPermissionAwareFolderTree(treeRootElement, filteredRootFolders, necessaryFoldersData);
+
     } catch (error) {
       console.error("Erreur lors de l'affichage de la page d'aide :", error);
       renderError(mainContentDiv, error);
