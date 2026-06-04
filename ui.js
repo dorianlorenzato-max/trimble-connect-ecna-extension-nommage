@@ -149,7 +149,11 @@ function renderCreateNamingRulePage(container, ruleData) {
   // Ajoute une classe CSS lorsque le mode réorganisation est actif
   const tableWrapperClass =
     ruleData.editMode === "reorder" ? "reorder-mode" : "";
-
+  // Le bouton "Modifier" ne s'affiche que s'il y a des colonnes
+  const editButtonHtml =
+    ruleData.columns.length > 0
+      ? `<button id="edit-column-btn" class="button-secondary" ${ruleData.selectedColumnIndex === null ? "disabled" : ""}>Modifier la colonne</button>`
+      : "";
   const tableHeaders =
     ruleData.columns.length > 0
       ? ruleData.columns
@@ -160,9 +164,13 @@ function renderCreateNamingRulePage(container, ruleData) {
                 ? `<span class="delete-column-icon" data-column-index="${index}">&#128465;</span>`
                 : "";
             // Ajoute une classe pour le glisser-déposer
-            const thClass =
-              ruleData.editMode === "reorder" ? "draggable-column" : "";
-
+            const isSelected = ruleData.selectedColumnIndex === index;
+            const thClass = `
+          ${ruleData.editMode === "normal" ? "clickable-header" : ""}
+          ${isSelected ? "selected" : ""}
+          ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
+          ${col.markedForDeletion ? "marked-for-deletion" : ""}
+        `;
             return `<th class="${thClass}">${deleteIcon}${col.name}</th>`;
           })
           .join("")
@@ -206,6 +214,7 @@ function renderCreateNamingRulePage(container, ruleData) {
 
         <div class="naming-rule-actions">
             <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
+            ${editButtonHtml}
             <button id="reorder-columns-btn" class="button-secondary ${ruleData.editMode === "reorder" ? "active-mode" : ""}">Réorganiser colonnes</button>
             <button id="delete-column-mode-btn" class="button-secondary ${ruleData.editMode === "delete" ? "active-mode" : ""}">Supprimer colonne</button>
             <span class="edit-mode-description">${editModeDescription}</span>
@@ -723,6 +732,40 @@ function renderNamingZone(container, convention) {
     </div>
   `;
 }
+function renderEditColumnModal(columnData, onConfirmCallback) {
+  const modalOverlay = document.createElement("div");
+  // ... (toute la création de la modale est identique à renderAddColumnModal)
+
+  // --- PRÉ-REMPLISSAGE DES DONNÉES ---
+  modalOverlay.querySelector("h2").textContent = "Modifier la colonne";
+  modalOverlay.querySelector("#column-name").value = columnData.name;
+  modalOverlay.querySelector(
+    `input[name="column-type"][value="${columnData.type}"]`,
+  ).checked = true;
+  modalOverlay.querySelector(
+    `input[name="column-required"][value="${columnData.required ? "yes" : "no"}"]`,
+  ).checked = true;
+
+  const listSection = modalOverlay.querySelector("#list-values-section");
+  if (columnData.type === "list") {
+    listSection.style.display = "block";
+    const listTableBody = modalOverlay.querySelector(
+      "#list-values-table tbody",
+    );
+    listTableBody.innerHTML = ""; // On vide les lignes par défaut
+    columnData.values.forEach((val) => {
+      const newRow = listTableBody.insertRow();
+      newRow.innerHTML = `
+          <td><input type="text" value="${val.value}"></td>
+          <td><input type="text" value="${val.description}"></td>
+      `;
+    });
+  }
+  modalOverlay.querySelector("#confirm-add-column-btn").textContent =
+    "Appliquer les modifications";
+
+  document.body.appendChild(modalOverlay);
+}
 // Exporter toutes les fonctions
 export {
   renderLoading,
@@ -741,4 +784,5 @@ export {
   renderControlPage,
   renderHelpCodificationPage,
   renderNamingZone,
+  renderEditColumnModal,
 };
