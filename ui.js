@@ -152,7 +152,7 @@ function renderCreateNamingRulePage(container, ruleData) {
   // Le bouton "Modifier" ne s'affiche que s'il y a des colonnes
   const editButtonHtml =
     ruleData.columns.length > 0
-      ? `<button id="edit-column-btn" class="button-secondary" ${ruleData.selectedColumnIndex === null ? "disabled" : ""}>Modifier la colonne</button>`
+      ? `<button id="edit-column-btn" class="button-secondary ${ruleData.editMode === "select_for_edit" ? "active-mode" : ""}">Modifier une colonne</button>`
       : "";
   const tableHeaders =
     ruleData.columns.length > 0
@@ -168,6 +168,7 @@ function renderCreateNamingRulePage(container, ruleData) {
             const thClass = `
           ${ruleData.editMode === "normal" ? "clickable-header" : ""}
           ${isSelected ? "selected" : ""}
+          ${ruleData.editMode === "select_for_edit" ? "clickable-header" : ""}
           ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
           ${col.markedForDeletion ? "marked-for-deletion" : ""}
         `;
@@ -732,19 +733,35 @@ function renderNamingZone(container, convention) {
     </div>
   `;
 }
+
 function renderEditColumnModal(columnData, onConfirmCallback) {
   const modalOverlay = document.createElement("div");
-  // ... (toute la création de la modale est identique à renderAddColumnModal)
+  modalOverlay.className = "modal-overlay";
+  modalOverlay.id = "edit-column-modal-overlay"; // ID différent pour éviter les conflits
+
+  // --- Le HTML est presque identique à celui de l'ajout ---
+  modalOverlay.innerHTML = `
+    <div class="modal-content">
+        <h2>Modifier la colonne</h2>
+        <!-- ... (le reste du HTML de la modale est identique à renderAddColumnModal) ... -->
+        <div class="modal-actions">
+            <button id="cancel-edit-column-btn" class="button-secondary">Annuler</button>
+            <button id="confirm-edit-column-btn" class="button-primary">Appliquer les modifications</button>
+        </div>
+    </div>
+  `;
+  document.body.appendChild(modalOverlay);
 
   // --- PRÉ-REMPLISSAGE DES DONNÉES ---
-  modalOverlay.querySelector("h2").textContent = "Modifier la colonne";
   modalOverlay.querySelector("#column-name").value = columnData.name;
-  modalOverlay.querySelector(
+  const typeRadio = modalOverlay.querySelector(
     `input[name="column-type"][value="${columnData.type}"]`,
-  ).checked = true;
-  modalOverlay.querySelector(
+  );
+  if (typeRadio) typeRadio.checked = true;
+  const requiredRadio = modalOverlay.querySelector(
     `input[name="column-required"][value="${columnData.required ? "yes" : "no"}"]`,
-  ).checked = true;
+  );
+  if (requiredRadio) requiredRadio.checked = true;
 
   const listSection = modalOverlay.querySelector("#list-values-section");
   if (columnData.type === "list") {
@@ -752,19 +769,50 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
     const listTableBody = modalOverlay.querySelector(
       "#list-values-table tbody",
     );
-    listTableBody.innerHTML = ""; // On vide les lignes par défaut
-    columnData.values.forEach((val) => {
-      const newRow = listTableBody.insertRow();
-      newRow.innerHTML = `
-          <td><input type="text" value="${val.value}"></td>
-          <td><input type="text" value="${val.description}"></td>
-      `;
-    });
+    listTableBody.innerHTML = "";
+    if (columnData.values && columnData.values.length > 0) {
+      columnData.values.forEach((val) => {
+        const newRow = listTableBody.insertRow();
+        newRow.innerHTML = `
+            <td><input type="text" value="${val.value || ""}"></td>
+            <td><input type="text" value="${val.description || ""}"></td>
+        `;
+      });
+    }
   }
-  modalOverlay.querySelector("#confirm-add-column-btn").textContent =
-    "Appliquer les modifications";
 
-  document.body.appendChild(modalOverlay);
+  // --- LOGIQUE DES ÉVÉNEMENTS (identique à renderAddColumnModal, mais avec des ID différents) ---
+  const closeModal = () => modalOverlay.remove();
+  modalOverlay
+    .querySelector("#cancel-edit-column-btn")
+    .addEventListener("click", closeModal);
+
+  modalOverlay
+    .querySelector("#add-list-row-btn")
+    .addEventListener("click", () => {
+      const listTableBody = modalOverlay.querySelector(
+        "#list-values-table tbody",
+      );
+      const newRow = listTableBody.insertRow();
+      newRow.innerHTML = `<td><input type="text"></td><td><input type="text"></td>`;
+    });
+
+  modalOverlay
+    .querySelectorAll('input[name="column-type"]')
+    .forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        listSection.style.display =
+          event.target.value === "list" ? "block" : "none";
+      });
+    });
+
+  modalOverlay
+    .querySelector("#confirm-edit-column-btn")
+    .addEventListener("click", () => {
+      // ... (La logique de lecture des données et d'appel du callback est identique à celle de renderAddColumnModal)
+      onConfirmCallback(updatedColumn); // Appelle le onColumnEdit
+      closeModal();
+    });
 }
 // Exporter toutes les fonctions
 export {
