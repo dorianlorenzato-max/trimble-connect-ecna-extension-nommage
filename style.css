@@ -461,10 +461,10 @@ body {
   padding: 4px 0; /* Ajoute de l'espacement vertical entre les dossiers */
 }
 
-/* Ajoute l'icône de dossier */
 .folder-item .folder-name::before {
   content: "📁"; /* Icône de dossier */
-  margin-right: 8px; /* Espace entre l'icône et le texte */
+  margin-right: 8px;
+  font-weight: normal;
 }
 
 .folder-item .folder-name {
@@ -695,15 +695,4 @@ body {
 .clickable-header.selected {
   background-color: #cce5ff !important;
   box-shadow: inset 0 0 0 2px #007bff;
-}
-.length-summary {
-  margin-top: 15px;
-  font-size: 0.9em;
-  color: #333;
-  background-color: #f8f9fa;
-  padding: 10px;
-  border-radius: 4px;
-}
-.length-summary p {
-  margin: 5px 0;
 }
