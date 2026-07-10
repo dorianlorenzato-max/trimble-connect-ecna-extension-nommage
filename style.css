@@ -696,3 +696,14 @@ body {
   background-color: #cce5ff !important;
   box-shadow: inset 0 0 0 2px #007bff;
 }
+.length-summary {
+  margin-top: 15px;
+  font-size: 0.9em;
+  color: #333;
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+}
+.length-summary p {
+  margin: 5px 0;
+}
