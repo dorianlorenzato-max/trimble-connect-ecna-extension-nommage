@@ -203,13 +203,7 @@ function renderCreateNamingRulePage(container, ruleData) {
           })
           .join("")
       : "<td></td>";
-  const { minLength, maxLength, hasUndefinedMaxLength } =
-    calculateTheoreticalLength(ruleData.columns);
 
-  const minLengthText = `Longueur minimale (champs obligatoires) : ${minLength} caractères.`;
-  const maxLengthText = hasUndefinedMaxLength
-    ? 'Longueur maximale : Non calculable (un champ "Texte libre" n\'a pas de limite).'
-    : `Longueur maximale (tous les champs) : ${maxLength} caractères.`;
   container.innerHTML = `
     <div class="naming-rule-creation-container">
         <h1>${pageTitle}</h1>
@@ -238,10 +232,6 @@ function renderCreateNamingRulePage(container, ruleData) {
                         <tr>${tableValues}</tr>
                     </tbody>
                 </table>
-                <div class="length-summary">
-                  <p>${minLengthText}</p>
-                  <p>${maxLengthText}</p>
-                </div>
             </div>
         </div>
 
@@ -250,24 +240,14 @@ function renderCreateNamingRulePage(container, ruleData) {
             <button id="save-naming-rule-btn" class="button-primary">Enregistrer</button>
         </div>
     </div>
+    <div class="naming-rule-summary" style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+    <h3>Estimation de la longueur</h3>
+    <p><strong>Longueur totale (champs obligatoires) :</strong> <span id="total-chars-required">0</span></p>
+    <p><strong>Longueur totale (tous les champs) :</strong> <span id="total-chars-all">0</span></p>
+  </div>
   `;
 }
 
-//fonction pour compter le nombre de caractères
-function getMaxLengthSelectorHtml() {
-  let options = "";
-  for (let i = 1; i <= 40; i++) {
-    options += `<option value="${i}">${i}</option>`;
-  }
-  return `
-    <div id="max-length-section" style="display: none; margin-top: 15px;">
-      <label><input type="checkbox" id="apply-max-length-checkbox"> Appliquer un nombre de caractères maximum</label>
-      <select id="max-length-select" disabled>
-        ${options}
-      </select>
-    </div>
-  `;
-}
 // fonction pour créer une colonne de nommage
 
 function renderAddColumnModal(onConfirmCallback) {
@@ -285,7 +265,7 @@ function renderAddColumnModal(onConfirmCallback) {
                 <label for="column-name">Nom de la colonne</label>
                 <input type="text" id="column-name" placeholder="Ex: Phase">
             </div>
-            
+
             <div class="form-group">
                 <label>Type de données</label>
                 <div class="checkbox-group">
@@ -306,7 +286,16 @@ function renderAddColumnModal(onConfirmCallback) {
                 </div>
             </div>
         </div>
-        ${getMaxLengthSelectorHtml()}
+<div id="max-length-section" class="form-section" style="display: none; margin-top: 15px;">
+    <label>
+        <input type="checkbox" id="apply-max-length-checkbox">
+        Appliquer un nombre de caractères maximum
+    </label>
+    <select id="max-length-select" disabled style="margin-top: 5px; width: auto;">
+        <!-- Les options de 1 à 40 seront générées par le JS -->
+    </select>
+</div>
+
         <!-- Section pour la liste, initialement cachée -->
         <div id="list-values-section" class="form-section" style="display: none;">
             <h4>Valeurs de la liste</h4>
@@ -337,7 +326,37 @@ function renderAddColumnModal(onConfirmCallback) {
         </div>
     </div>
   `;
+  // Logique pour la contrainte de longueur ===
+  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
+  const maxLengthCheckbox = modalOverlay.querySelector(
+    "#apply-max-length-checkbox",
+  );
+  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
 
+  // Générer les options pour le select
+  for (let i = 1; i <= 40; i++) {
+    const option = document.createElement("option");
+    option.value = i;
+    option.textContent = i;
+    maxLengthSelect.appendChild(option);
+  }
+
+  maxLengthCheckbox.addEventListener("change", () => {
+    maxLengthSelect.disabled = !maxLengthCheckbox.checked;
+  });
+
+  modalOverlay
+    .querySelectorAll('input[name="column-type"]')
+    .forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        const isTextType = event.target.value === "text";
+        maxLengthSection.style.display = isTextType ? "block" : "none";
+        if (!isTextType) {
+          maxLengthCheckbox.checked = false;
+          maxLengthSelect.disabled = true;
+        }
+      });
+    });
   document.body.appendChild(modalOverlay);
 
   // Logique pour fermer la modale
@@ -349,7 +368,6 @@ function renderAddColumnModal(onConfirmCallback) {
     .querySelector("#confirm-add-column-btn")
     .addEventListener("click", () => {
       // 1. Lire toutes les données du formulaire de la modale
-
       const name = modalOverlay.querySelector("#column-name").value.trim();
       if (!name) {
         alert("Veuillez donner un nom à la colonne.");
@@ -362,12 +380,19 @@ function renderAddColumnModal(onConfirmCallback) {
       const isRequired =
         modalOverlay.querySelector('input[name="column-required"]:checked')
           .value === "yes";
-      // Récupération de la longueur max
-      let maxLength = null;
-      if (type === "text" && applyMaxLengthCheckbox.checked) {
-        maxLength = parseInt(maxLengthSelect.value, 10);
-      }
+
       let values = [];
+      let maxLength = null;
+      if (
+        modalOverlay.querySelector('input[name="column-type"]:checked')
+          .value === "text" &&
+        modalOverlay.querySelector("#apply-max-length-checkbox").checked
+      ) {
+        maxLength = parseInt(
+          modalOverlay.querySelector("#max-length-select").value,
+          10,
+        );
+      }
       if (type === "list") {
         const listRows = modalOverlay.querySelectorAll(
           "#list-values-table tbody tr",
@@ -390,7 +415,7 @@ function renderAddColumnModal(onConfirmCallback) {
         type: type,
         required: isRequired,
         values: values, // sera un tableau vide si le type n'est pas 'list'
-        maxLength: maxLength,
+        maxLength: maxLength, // Ajout de la nouvelle propriété
       };
 
       // 3. Appeler la fonction de callback avec les nouvelles données
@@ -411,15 +436,7 @@ function renderAddColumnModal(onConfirmCallback) {
         <td><input type="text" placeholder="Description (optionnel)"></td>
     `;
   });
-  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
-  // Logique pour la case à cocher de la longueur max
-  const applyMaxLengthCheckbox = modalOverlay.querySelector(
-    "#apply-max-length-checkbox",
-  );
-  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
-  applyMaxLengthCheckbox.addEventListener("change", () => {
-    maxLengthSelect.disabled = !applyMaxLengthCheckbox.checked;
-  });
+
   // Logique pour afficher/cacher la table de liste
   modalOverlay
     .querySelectorAll('input[name="column-type"]')
@@ -428,8 +445,6 @@ function renderAddColumnModal(onConfirmCallback) {
         const listSection = modalOverlay.querySelector("#list-values-section");
         listSection.style.display =
           event.target.value === "list" ? "block" : "none";
-        maxLengthSection.style.display =
-          event.target.value === "text" ? "block" : "none";
       });
     });
 }
@@ -552,12 +567,6 @@ function validatePart(value, rule) {
   // 3. Validation par type
   switch (rule.type) {
     case "text":
-      if (rule.maxLength && value.length > rule.maxLength) {
-        return {
-          isValid: false,
-          reason: `Le texte ne doit pas dépasser ${rule.maxLength} caractères.`,
-        };
-      }
       return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
     case "list":
       const isValid = rule.values.some((v) => v.value === value);
@@ -754,7 +763,7 @@ function renderNamingZone(container, convention) {
         const maxLengthAttr = col.maxLength
           ? `maxlength="${col.maxLength}"`
           : "";
-        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}">`;
+        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}" ${maxLengthAttr}>`;
       }
 
       const separator =
@@ -780,7 +789,8 @@ function renderNamingZone(container, convention) {
     </div>
     <div class="naming-preview">
       <strong>Aperçu : </strong><span id="final-name-preview"></span>
-      <span id="realtime-char-count" style="float: right;"></span>
+      <strong style="margin-left: 15px;">Caractères : </strong>
+      <span id="final-name-char-count">0</span>
     </div>
   `;
 }
@@ -800,7 +810,15 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
                 <label for="column-name">Nom de la colonne</label>
                 <input type="text" id="column-name" placeholder="Ex: Phase">
             </div>
-
+<div id="max-length-section" class="form-section" style="display: none; margin-top: 15px;">
+    <label>
+        <input type="checkbox" id="apply-max-length-checkbox">
+        Appliquer un nombre de caractères maximum
+    </label>
+    <select id="max-length-select" disabled style="margin-top: 5px; width: auto;">
+        <!-- Les options de 1 à 40 seront générées par le JS -->
+    </select>
+</div>
             <div class="form-group">
                 <label>Type de données</label>
                 <div class="checkbox-group">
@@ -821,7 +839,7 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
                 </div>
             </div>
         </div>
-        ${getMaxLengthSelectorHtml()}
+
         <div id="list-values-section" class="form-section" style="display: none;">
             <h4>Valeurs de la liste</h4>
             <div class="list-values-table-wrapper">
@@ -839,6 +857,46 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
         </div>
     </div>
   `;
+
+  // Logique pour la contrainte de longueur (avec pré-remplissage) ===
+  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
+  const maxLengthCheckbox = modalOverlay.querySelector(
+    "#apply-max-length-checkbox",
+  );
+  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
+
+  for (let i = 1; i <= 40; i++) {
+    const option = document.createElement("option");
+    option.value = i;
+    option.textContent = i;
+    maxLengthSelect.appendChild(option);
+  }
+
+  if (columnData.type === "text") {
+    maxLengthSection.style.display = "block";
+    if (columnData.maxLength) {
+      maxLengthCheckbox.checked = true;
+      maxLengthSelect.disabled = false;
+      maxLengthSelect.value = columnData.maxLength;
+    }
+  }
+
+  maxLengthCheckbox.addEventListener("change", () => {
+    maxLengthSelect.disabled = !maxLengthCheckbox.checked;
+  });
+
+  modalOverlay
+    .querySelectorAll('input[name="column-type"]')
+    .forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        const isTextType = event.target.value === "text";
+        maxLengthSection.style.display = isTextType ? "block" : "none";
+        if (!isTextType) {
+          maxLengthCheckbox.checked = false;
+          maxLengthSelect.disabled = true;
+        }
+      });
+    });
   document.body.appendChild(modalOverlay);
 
   // --- PRÉ-REMPLISSAGE DES DONNÉES ---
@@ -846,17 +904,6 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
   const typeRadio = modalOverlay.querySelector(
     `input[name="column-type"][value="${columnData.type}"]`,
   );
-  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
-  if (columnData.type === "text") {
-    maxLengthSection.style.display = "block";
-    if (columnData.maxLength) {
-      modalOverlay.querySelector("#apply-max-length-checkbox").checked = true;
-      modalOverlay.querySelector("#max-length-select").disabled = false;
-      modalOverlay.querySelector("#max-length-select").value =
-        columnData.maxLength;
-    }
-  }
-
   if (typeRadio) typeRadio.checked = true;
   const requiredRadio = modalOverlay.querySelector(
     `input[name="column-required"][value="${columnData.required ? "yes" : "no"}"]`,
@@ -920,12 +967,18 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
       const isRequired =
         modalOverlay.querySelector('input[name="column-required"]:checked')
           .value === "yes";
-      let maxLength = null;
-      if (type === "text" && applyMaxLengthCheckbox.checked) {
-        maxLength = parseInt(maxLengthSelect.value, 10);
-      }
-
       let values = [];
+      let maxLength = null;
+      if (
+        modalOverlay.querySelector('input[name="column-type"]:checked')
+          .value === "text" &&
+        modalOverlay.querySelector("#apply-max-length-checkbox").checked
+      ) {
+        maxLength = parseInt(
+          modalOverlay.querySelector("#max-length-select").value,
+          10,
+        );
+      }
       if (type === "list") {
         modalOverlay
           .querySelectorAll("#list-values-table tbody tr")
@@ -945,75 +998,12 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
         type,
         required: isRequired,
         values,
-        maxLength,
+        maxLength: maxLength,
       };
       onConfirmCallback(updatedColumn);
       closeModal();
     });
 }
-// NOUVELLE FONCTION AIDE
-function getMaxLengthSelectorHtml() {
-  let options = "";
-  for (let i = 1; i <= 40; i++) {
-    options += `<option value="${i}">${i}</option>`;
-  }
-  return `
-    <div id="max-length-section" class="form-section" style="display: none;">
-      <label><input type="checkbox" id="apply-max-length-checkbox"> Appliquer un nombre de caractères maximum</label>
-      <select id="max-length-select" disabled>
-        ${options}
-      </select>
-    </div>
-  `;
-}
-function calculateTheoreticalLength(columns) {
-  let minLength = 0;
-  let maxLength = 0;
-  let hasUndefinedMaxLength = false;
-
-  columns.forEach((col, index) => {
-    let colMaxLength = 0;
-
-    switch (col.type) {
-      case "number1":
-        colMaxLength = 1;
-        break;
-      case "number2":
-        colMaxLength = 2;
-        break;
-      case "number3":
-        colMaxLength = 3;
-        break;
-      case "trigram":
-        colMaxLength = 3;
-        break;
-      case "list":
-        colMaxLength = Math.max(0, ...col.values.map((v) => v.value.length));
-        break;
-      case "text":
-        if (col.maxLength) {
-          colMaxLength = col.maxLength;
-        } else {
-          hasUndefinedMaxLength = true;
-        }
-        break;
-    }
-
-    if (col.required) {
-      minLength += colMaxLength;
-    }
-    maxLength += colMaxLength;
-
-    // Ajout des séparateurs
-    if (index < columns.length - 1) {
-      if (col.required) minLength++;
-      maxLength++;
-    }
-  });
-
-  return { minLength, maxLength, hasUndefinedMaxLength };
-}
-
 // Exporter toutes les fonctions
 export {
   renderLoading,
