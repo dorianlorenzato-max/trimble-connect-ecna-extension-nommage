@@ -203,7 +203,13 @@ function renderCreateNamingRulePage(container, ruleData) {
           })
           .join("")
       : "<td></td>";
+  const { minLength, maxLength, hasUndefinedMaxLength } =
+    calculateTheoreticalLength(ruleData.columns);
 
+  const minLengthText = `Longueur minimale (champs obligatoires) : ${minLength} caractères.`;
+  const maxLengthText = hasUndefinedMaxLength
+    ? 'Longueur maximale : Non calculable (un champ "Texte libre" n\'a pas de limite).'
+    : `Longueur maximale (tous les champs) : ${maxLength} caractères.`;
   container.innerHTML = `
     <div class="naming-rule-creation-container">
         <h1>${pageTitle}</h1>
@@ -232,6 +238,10 @@ function renderCreateNamingRulePage(container, ruleData) {
                         <tr>${tableValues}</tr>
                     </tbody>
                 </table>
+                <div class="length-summary">
+                  <p>${minLengthText}</p>
+                  <p>${maxLengthText}</p>
+                </div>
             </div>
         </div>
 
@@ -243,6 +253,21 @@ function renderCreateNamingRulePage(container, ruleData) {
   `;
 }
 
+//fonction pour compter le nombre de caractères
+function getMaxLengthSelectorHtml() {
+  let options = "";
+  for (let i = 1; i <= 40; i++) {
+    options += `<option value="${i}">${i}</option>`;
+  }
+  return `
+    <div id="max-length-section" style="display: none; margin-top: 15px;">
+      <label><input type="checkbox" id="apply-max-length-checkbox"> Appliquer un nombre de caractères maximum</label>
+      <select id="max-length-select" disabled>
+        ${options}
+      </select>
+    </div>
+  `;
+}
 // fonction pour créer une colonne de nommage
 
 function renderAddColumnModal(onConfirmCallback) {
@@ -260,7 +285,7 @@ function renderAddColumnModal(onConfirmCallback) {
                 <label for="column-name">Nom de la colonne</label>
                 <input type="text" id="column-name" placeholder="Ex: Phase">
             </div>
-
+            
             <div class="form-group">
                 <label>Type de données</label>
                 <div class="checkbox-group">
@@ -281,7 +306,7 @@ function renderAddColumnModal(onConfirmCallback) {
                 </div>
             </div>
         </div>
-
+        ${getMaxLengthSelectorHtml()}
         <!-- Section pour la liste, initialement cachée -->
         <div id="list-values-section" class="form-section" style="display: none;">
             <h4>Valeurs de la liste</h4>
@@ -324,6 +349,7 @@ function renderAddColumnModal(onConfirmCallback) {
     .querySelector("#confirm-add-column-btn")
     .addEventListener("click", () => {
       // 1. Lire toutes les données du formulaire de la modale
+
       const name = modalOverlay.querySelector("#column-name").value.trim();
       if (!name) {
         alert("Veuillez donner un nom à la colonne.");
@@ -336,7 +362,11 @@ function renderAddColumnModal(onConfirmCallback) {
       const isRequired =
         modalOverlay.querySelector('input[name="column-required"]:checked')
           .value === "yes";
-
+      // Récupération de la longueur max
+      let maxLength = null;
+      if (type === "text" && applyMaxLengthCheckbox.checked) {
+        maxLength = parseInt(maxLengthSelect.value, 10);
+      }
       let values = [];
       if (type === "list") {
         const listRows = modalOverlay.querySelectorAll(
@@ -360,6 +390,7 @@ function renderAddColumnModal(onConfirmCallback) {
         type: type,
         required: isRequired,
         values: values, // sera un tableau vide si le type n'est pas 'list'
+        maxLength: maxLength,
       };
 
       // 3. Appeler la fonction de callback avec les nouvelles données
@@ -380,7 +411,15 @@ function renderAddColumnModal(onConfirmCallback) {
         <td><input type="text" placeholder="Description (optionnel)"></td>
     `;
   });
-
+  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
+  // Logique pour la case à cocher de la longueur max
+  const applyMaxLengthCheckbox = modalOverlay.querySelector(
+    "#apply-max-length-checkbox",
+  );
+  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
+  applyMaxLengthCheckbox.addEventListener("change", () => {
+    maxLengthSelect.disabled = !applyMaxLengthCheckbox.checked;
+  });
   // Logique pour afficher/cacher la table de liste
   modalOverlay
     .querySelectorAll('input[name="column-type"]')
@@ -389,6 +428,8 @@ function renderAddColumnModal(onConfirmCallback) {
         const listSection = modalOverlay.querySelector("#list-values-section");
         listSection.style.display =
           event.target.value === "list" ? "block" : "none";
+        maxLengthSection.style.display =
+          event.target.value === "text" ? "block" : "none";
       });
     });
 }
@@ -511,6 +552,12 @@ function validatePart(value, rule) {
   // 3. Validation par type
   switch (rule.type) {
     case "text":
+      if (rule.maxLength && value.length > rule.maxLength) {
+        return {
+          isValid: false,
+          reason: `Le texte ne doit pas dépasser ${rule.maxLength} caractères.`,
+        };
+      }
       return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
     case "list":
       const isValid = rule.values.some((v) => v.value === value);
@@ -704,6 +751,9 @@ function renderNamingZone(container, convention) {
                      ${options}
                    </select>`;
       } else {
+        const maxLengthAttr = col.maxLength
+          ? `maxlength="${col.maxLength}"`
+          : "";
         inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}">`;
       }
 
@@ -730,6 +780,7 @@ function renderNamingZone(container, convention) {
     </div>
     <div class="naming-preview">
       <strong>Aperçu : </strong><span id="final-name-preview"></span>
+      <span id="realtime-char-count" style="float: right;"></span>
     </div>
   `;
 }
@@ -770,7 +821,7 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
                 </div>
             </div>
         </div>
-
+        ${getMaxLengthSelectorHtml()}
         <div id="list-values-section" class="form-section" style="display: none;">
             <h4>Valeurs de la liste</h4>
             <div class="list-values-table-wrapper">
@@ -795,6 +846,17 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
   const typeRadio = modalOverlay.querySelector(
     `input[name="column-type"][value="${columnData.type}"]`,
   );
+  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
+  if (columnData.type === "text") {
+    maxLengthSection.style.display = "block";
+    if (columnData.maxLength) {
+      modalOverlay.querySelector("#apply-max-length-checkbox").checked = true;
+      modalOverlay.querySelector("#max-length-select").disabled = false;
+      modalOverlay.querySelector("#max-length-select").value =
+        columnData.maxLength;
+    }
+  }
+
   if (typeRadio) typeRadio.checked = true;
   const requiredRadio = modalOverlay.querySelector(
     `input[name="column-required"][value="${columnData.required ? "yes" : "no"}"]`,
@@ -858,6 +920,11 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
       const isRequired =
         modalOverlay.querySelector('input[name="column-required"]:checked')
           .value === "yes";
+      let maxLength = null;
+      if (type === "text" && applyMaxLengthCheckbox.checked) {
+        maxLength = parseInt(maxLengthSelect.value, 10);
+      }
+
       let values = [];
       if (type === "list") {
         modalOverlay
@@ -873,10 +940,31 @@ function renderEditColumnModal(columnData, onConfirmCallback) {
             }
           });
       }
-      const updatedColumn = { name, type, required: isRequired, values };
+      const updatedColumn = {
+        name,
+        type,
+        required: isRequired,
+        values,
+        maxLength,
+      };
       onConfirmCallback(updatedColumn);
       closeModal();
     });
+}
+// NOUVELLE FONCTION AIDE
+function getMaxLengthSelectorHtml() {
+  let options = "";
+  for (let i = 1; i <= 40; i++) {
+    options += `<option value="${i}">${i}</option>`;
+  }
+  return `
+    <div id="max-length-section" class="form-section" style="display: none;">
+      <label><input type="checkbox" id="apply-max-length-checkbox"> Appliquer un nombre de caractères maximum</label>
+      <select id="max-length-select" disabled>
+        ${options}
+      </select>
+    </div>
+  `;
 }
 // Exporter toutes les fonctions
 export {
