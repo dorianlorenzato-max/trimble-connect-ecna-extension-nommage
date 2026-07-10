@@ -1299,53 +1299,6 @@ import {
       renderError(mainContentDiv, error);
     }
   }
-  function calculateTheoreticalLength(columns) {
-    let minLength = 0;
-    let maxLength = 0;
-    let hasUndefinedMaxLength = false;
-
-    columns.forEach((col, index) => {
-      let colMaxLength = 0;
-
-      switch (col.type) {
-        case "number1":
-          colMaxLength = 1;
-          break;
-        case "number2":
-          colMaxLength = 2;
-          break;
-        case "number3":
-          colMaxLength = 3;
-          break;
-        case "trigram":
-          colMaxLength = 3;
-          break;
-        case "list":
-          colMaxLength = Math.max(0, ...col.values.map((v) => v.value.length));
-          break;
-        case "text":
-          if (col.maxLength) {
-            colMaxLength = col.maxLength;
-          } else {
-            hasUndefinedMaxLength = true;
-          }
-          break;
-      }
-
-      if (col.required) {
-        minLength += colMaxLength;
-      }
-      maxLength += colMaxLength;
-
-      // Ajout des séparateurs
-      if (index < columns.length - 1) {
-        if (col.required) minLength++;
-        maxLength++;
-      }
-    });
-
-    return { minLength, maxLength, hasUndefinedMaxLength };
-  }
 
   const onColumnAdd = (newColumn) => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
