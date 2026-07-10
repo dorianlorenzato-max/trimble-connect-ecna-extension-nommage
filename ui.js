@@ -158,21 +158,35 @@ function renderCreateNamingRulePage(container, ruleData) {
     ruleData.columns.length > 0
       ? ruleData.columns
           .map((col, index) => {
-            // Affiche l'icône de poubelle si en mode suppression
             const deleteIcon =
               ruleData.editMode === "delete"
                 ? `<span class="delete-column-icon" data-column-index="${index}">&#128465;</span>`
                 : "";
-            // Ajoute une classe pour le glisser-déposer
+
+            // Création de la ligne d'information
+            let constraints = [];
+            if (col.required) constraints.push("Obligatoire");
+            if (col.maxLength) constraints.push(`Max. ${col.maxLength} car.`);
+            const constraintText =
+              constraints.length > 0
+                ? `<div style="color: #005a70; font-style: italic; font-size: 0.8em; margin-bottom: 4px;">${constraints.join(", ")}</div>`
+                : "";
+
             const isSelected = ruleData.selectedColumnIndex === index;
             const thClass = `
-          ${ruleData.editMode === "normal" ? "clickable-header" : ""}
-          ${isSelected ? "selected" : ""}
-          ${ruleData.editMode === "select_for_edit" ? "clickable-header" : ""}
-          ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
-          ${col.markedForDeletion ? "marked-for-deletion" : ""}
-        `;
-            return `<th class="${thClass}">${deleteIcon}${col.name}</th>`;
+                    ${ruleData.editMode === "normal" ? "clickable-header" : ""}
+                    ${isSelected ? "selected" : ""}
+                    ${ruleData.editMode === "select_for_edit" ? "clickable-header" : ""}
+                    ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
+                    ${col.markedForDeletion ? "marked-for-deletion" : ""}
+                `;
+
+            const bgColor = typeColorMap[col.type] || "";
+
+            return `<th class="${thClass}" style="background-color: ${bgColor};">
+                            ${constraintText}
+                            <div class="th-content-wrapper">${deleteIcon}${col.name}</div>
+                        </th>`;
           })
           .join("")
       : "<th>(Aucune colonne)</th>";
@@ -185,21 +199,52 @@ function renderCreateNamingRulePage(container, ruleData) {
     number3: "3 chiffres",
     trigram: "Trigramme",
   };
+  const typeColorMap = {
+    text: "#EBF5FB", // Bleu très clair
+    list: "#E8F8F5", // Vert très clair
+    number1: "#FEF9E7", // Jaune très clair
+    number2: "#FEF9E7",
+    number3: "#FEF9E7",
+    trigram: "#FDEDEC", // Rouge très clair
+  };
 
+  const typeNameMap = {
+    text: "Texte libre",
+    list: "Liste",
+    number1: "Numérique",
+    number2: "Numérique",
+    number3: "Numérique",
+    trigram: "Trigramme",
+  };
+
+  // Créer une liste unique pour la légende
+  const legendTypes = [...new Set(Object.values(typeNameMap))];
+
+  const legendHtml = legendTypes
+    .map((typeName) => {
+      const typeKey = Object.keys(typeNameMap).find(
+        (key) => typeNameMap[key] === typeName,
+      );
+      const color = typeColorMap[typeKey];
+      return `<span style="display: inline-flex; align-items: center; margin-right: 15px;">
+                <span style="width: 12px; height: 12px; background-color: ${color}; border: 1px solid #ccc; margin-right: 5px;"></span>
+                ${typeName}
+            </span>`;
+    })
+    .join("");
   const tableValues =
     ruleData.columns.length > 0
       ? ruleData.columns
           .map((col) => {
             const tdClass = col.markedForDeletion ? "marked-for-deletion" : "";
+            const bgColor = typeColorMap[col.type] || "";
             let content = "";
             if (col.type === "list") {
-              // Si c'est une liste, on mappe les valeurs pour n'afficher que la propriété 'value'
               content = col.values.map((v) => v.value).join("<br>");
             } else {
-              // Sinon, on affiche le nom du type (par exemple "Texte libre")
               content = `<i>${typeDisplayMap[col.type] || col.type}</i>`;
             }
-            return `<td class="${tdClass}">${content}</td>`;
+            return `<td class="${tdClass}" style="background-color: ${bgColor};">${content}</td>`;
           })
           .join("")
       : "<td></td>";
@@ -207,7 +252,9 @@ function renderCreateNamingRulePage(container, ruleData) {
   container.innerHTML = `
     <div class="naming-rule-creation-container">
         <h1>${pageTitle}</h1>
-
+<div class="naming-rule-legend" style="margin-bottom: 10px; font-size: 0.9em;">
+    ${legendHtml}
+</div>
         <div class="form-section">
             <label for="naming-rule-name">Affecter un nom à la convention de nommage :</label>
             <input type="text" id="naming-rule-name" value="${ruleData.name || ""}" placeholder="Ex: Convention principale">
@@ -739,10 +786,16 @@ function renderNamingZone(container, convention) {
     number3: "3 chiffres (ex: 101)",
     trigram: "3 lettres (ex: ARC)",
   };
-
+  const createPlaceholder = (col) => {
+    let basePlaceholder = typeDisplayMap[col.type] || "";
+    if (col.type === "text" && col.maxLength) {
+      basePlaceholder += ` (max. ${col.maxLength} car.)`;
+    }
+    return basePlaceholder;
+  };
   const fieldsHtml = convention.columns
     .map((col, index) => {
-      const placeholder = typeDisplayMap[col.type] || "";
+      const placeholder = createPlaceholder(col);
       const isRequired = col.required
         ? ' <span class="required-asterisk">*</span>'
         : "";
@@ -760,10 +813,7 @@ function renderNamingZone(container, convention) {
                      ${options}
                    </select>`;
       } else {
-        const maxLengthAttr = col.maxLength
-          ? `maxlength="${col.maxLength}"`
-          : "";
-        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}" ${maxLengthAttr}>`;
+        inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}">`;
       }
 
       const separator =
@@ -787,11 +837,16 @@ function renderNamingZone(container, convention) {
     <div class="naming-zone">
       ${fieldsHtml}
     </div>
-    <div class="naming-preview">
-      <strong>Aperçu : </strong><span id="final-name-preview"></span>
-      <strong style="margin-left: 15px;">Caractères : </strong>
-      <span id="final-name-char-count">0</span>
+    <div class="naming-preview" style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <strong>Aperçu : </strong>
+        <span id="final-name-preview"></span>
     </div>
+    <div>
+        <strong>Caractères : </strong>
+        <span id="final-name-char-count">0</span>
+    </div>
+</div>
   `;
 }
 
