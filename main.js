@@ -563,11 +563,13 @@ import {
     const fileExtension = helpCodificationState.file.name.split(".").pop();
     const finalName = finalNameParts.filter((part) => part !== "").join("-");
     const finalNameWithExt = `${finalName}.${fileExtension}`;
+    const finalNameCharCount = finalName.length;
+    const charCountSpan = document.getElementById("final-name-char-count");
+    if (charCountSpan) {
+      charCountSpan.textContent = finalNameCharCount;
+    }
     previewSpan.textContent = finalNameWithExt;
     helpCodificationState.finalName = finalNameWithExt;
-    const countSpan = document.getElementById("realtime-char-count");
-    if (countSpan)
-      countSpan.textContent = `${finalNameWithExt.length} caractères`;
     uploadBtn.disabled = !isFormValid;
   }
 
@@ -783,6 +785,16 @@ import {
   // ----------------------------------
   function validatePart(value, rule) {
     // 1. Gérer le cas "non obligatoire"
+    if (
+      rule.type === "text" &&
+      rule.maxLength &&
+      value.length > rule.maxLength
+    ) {
+      return {
+        isValid: false,
+        reason: `Doit contenir au maximum ${rule.maxLength} caractères.`,
+      };
+    }
     if (!rule.required && !value) {
       return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
     }
@@ -1421,10 +1433,69 @@ import {
       }
     }
   }
+  //  Fonction de calcul de la longueur de la convention ===
+  function calculateConventionLength(columns) {
+    if (!columns || columns.length === 0) {
+      return 0;
+    }
 
+    let totalLength = 0;
+    let isUnlimited = false;
+
+    columns.forEach((column) => {
+      switch (column.type) {
+        case "number1":
+          totalLength += 1;
+          break;
+        case "number2":
+          totalLength += 2;
+          break;
+        case "number3":
+        case "trigram":
+          totalLength += 3;
+          break;
+        case "list":
+          const maxLengthInList =
+            column.values.length > 0
+              ? Math.max(...column.values.map((v) => v.value.length))
+              : 0;
+          totalLength += maxLengthInList;
+          break;
+        case "text":
+          if (column.maxLength) {
+            totalLength += column.maxLength;
+          } else {
+            isUnlimited = true;
+          }
+          break;
+      }
+    });
+
+    if (isUnlimited) {
+      return "Pas de contraintes de caractères maximum";
+    }
+
+    // Ajout des séparateurs
+    totalLength += Math.max(0, columns.length - 1);
+
+    return totalLength;
+  }
   const rerenderPage = () => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    const requiredColumns = currentRuleState.columns.filter((c) => c.required);
+    const requiredLength = calculateConventionLength(requiredColumns);
+    const allLength = calculateConventionLength(currentRuleState.columns);
+
+    const requiredSpan = document.getElementById("total-chars-required");
+    const allSpan = document.getElementById("total-chars-all");
+
+    if (requiredSpan) {
+      requiredSpan.textContent = requiredLength;
+    }
+    if (allSpan) {
+      allSpan.textContent = allLength;
+    }
     attachCreatePageListeners();
   };
 })();
