@@ -135,7 +135,32 @@ function renderCreateNamingRulePage(container, ruleData) {
   const pageTitle = ruleData.name
     ? `Édition de la codification : ${ruleData.name}`
     : "Création d'une nouvelle codification de nommage";
+const typeDisplayMap = {
+  text: "Texte libre",
+  list: "Liste",
+  number1: "1 chiffre",
+  number2: "2 chiffres",
+  number3: "3 chiffres",
+  trigram: "Trigramme",
+};
 
+const typeColorMap = {
+    text: '#EBF5FB', // Bleu très clair
+    list: '#E8F8F5', // Vert très clair
+    number1: '#FEF9E7', // Jaune très clair
+    number2: '#FEF9E7',
+    number3: '#FEF9E7',
+    trigram: '#FDEDEC' // Rouge très clair
+};
+
+const typeNameMap = {
+    text: 'Texte libre',
+    list: 'Liste',
+    number1: 'Numérique',
+    number2: 'Numérique',
+    number3: 'Numérique',
+    trigram: 'Trigramme'
+};
   // Définition du texte d'aide
   let editModeDescription = "";
   if (ruleData.editMode === "reorder") {
@@ -190,32 +215,6 @@ function renderCreateNamingRulePage(container, ruleData) {
           })
           .join("")
       : "<th>(Aucune colonne)</th>";
-
-  const typeDisplayMap = {
-    text: "Texte libre",
-    list: "Liste",
-    number1: "1 chiffre",
-    number2: "2 chiffres",
-    number3: "3 chiffres",
-    trigram: "Trigramme",
-  };
-  const typeColorMap = {
-    text: "#EBF5FB", // Bleu très clair
-    list: "#E8F8F5", // Vert très clair
-    number1: "#FEF9E7", // Jaune très clair
-    number2: "#FEF9E7",
-    number3: "#FEF9E7",
-    trigram: "#FDEDEC", // Rouge très clair
-  };
-
-  const typeNameMap = {
-    text: "Texte libre",
-    list: "Liste",
-    number1: "Numérique",
-    number2: "Numérique",
-    number3: "Numérique",
-    trigram: "Trigramme",
-  };
 
   // Créer une liste unique pour la légende
   const legendTypes = [...new Set(Object.values(typeNameMap))];
