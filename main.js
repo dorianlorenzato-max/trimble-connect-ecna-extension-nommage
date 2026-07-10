@@ -1432,6 +1432,7 @@ import {
         });
       }
     }
+    updateCharacterCounts();
   }
   //  Fonction de calcul de la longueur de la convention ===
   function calculateConventionLength(columns) {
@@ -1480,22 +1481,29 @@ import {
 
     return totalLength;
   }
-  const rerenderPage = () => {
-    currentRuleState.name = document.getElementById("naming-rule-name").value;
-    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+  function updateCharacterCounts() {
+    if (!currentRuleState || !document.getElementById("total-chars-required")) {
+      // Ne rien faire si l'état ou les éléments ne sont pas prêts
+      return;
+    }
+
+    console.log(
+      "Mise à jour des compteurs avec les colonnes :",
+      currentRuleState.columns,
+    ); // Ligne de débogage
+
     const requiredColumns = currentRuleState.columns.filter((c) => c.required);
     const requiredLength = calculateConventionLength(requiredColumns);
     const allLength = calculateConventionLength(currentRuleState.columns);
 
-    const requiredSpan = document.getElementById("total-chars-required");
-    const allSpan = document.getElementById("total-chars-all");
-
-    if (requiredSpan) {
-      requiredSpan.textContent = requiredLength;
-    }
-    if (allSpan) {
-      allSpan.textContent = allLength;
-    }
+    document.getElementById("total-chars-required").textContent =
+      requiredLength;
+    document.getElementById("total-chars-all").textContent = allLength;
+  }
+  const rerenderPage = () => {
+    currentRuleState.name = document.getElementById("naming-rule-name").value;
+    renderCreateNamingRulePage(mainContentDiv, currentRuleState);
+    updateCharacterCounts();
     attachCreatePageListeners();
   };
 })();
