@@ -135,32 +135,32 @@ function renderCreateNamingRulePage(container, ruleData) {
   const pageTitle = ruleData.name
     ? `Édition de la codification : ${ruleData.name}`
     : "Création d'une nouvelle codification de nommage";
-const typeDisplayMap = {
-  text: "Texte libre",
-  list: "Liste",
-  number1: "1 chiffre",
-  number2: "2 chiffres",
-  number3: "3 chiffres",
-  trigram: "Trigramme",
-};
+  const typeDisplayMap = {
+    text: "Texte libre",
+    list: "Liste",
+    number1: "1 chiffre",
+    number2: "2 chiffres",
+    number3: "3 chiffres",
+    trigram: "Trigramme",
+  };
 
-const typeColorMap = {
-    text: '#EBF5FB', // Bleu très clair
-    list: '#E8F8F5', // Vert très clair
-    number1: '#FEF9E7', // Jaune très clair
-    number2: '#FEF9E7',
-    number3: '#FEF9E7',
-    trigram: '#FDEDEC' // Rouge très clair
-};
+  const typeColorMap = {
+    text: "#EBF5FB", // Bleu très clair
+    list: "#E8F8F5", // Vert très clair
+    number1: "#FEF9E7", // Jaune très clair
+    number2: "#FEF9E7",
+    number3: "#FEF9E7",
+    trigram: "#FDEDEC", // Rouge très clair
+  };
 
-const typeNameMap = {
-    text: 'Texte libre',
-    list: 'Liste',
-    number1: 'Numérique',
-    number2: 'Numérique',
-    number3: 'Numérique',
-    trigram: 'Trigramme'
-};
+  const typeNameMap = {
+    text: "Texte libre",
+    list: "Liste",
+    number1: "Numérique",
+    number2: "Numérique",
+    number3: "Numérique",
+    trigram: "Trigramme",
+  };
   // Définition du texte d'aide
   let editModeDescription = "";
   if (ruleData.editMode === "reorder") {
@@ -746,7 +746,10 @@ function renderNamingControlTable(documents, conventionRules) {
 function renderHelpCodificationPage(container) {
   container.innerHTML = `
     <h1>Aide à la Codification</h1>
-    <p>Déposez votre document et sélectionnez un dossier de destination pour commencer.</p>
+    <p>Déposez votre document et sélectionnez un dossier de destination pour commencer.
+  <span style="font-style: italic; color: #c9302c; margin-left: 10px;">
+    (seuls les dossiers où vous avez une autorisation de dépôt sont affichés)
+  </span></p>
     <div class="help-page-layout">
       <!-- Zone de dépôt de fichier -->
       <div id="file-drop-zone" class="drop-zone">
@@ -757,8 +760,8 @@ function renderHelpCodificationPage(container) {
       <!-- Arborescence des dossiers -->
       <div class="folder-browser-container">
         <div class="folder-legend">
-          <span class="legend-item"><span class="color-box allowed"></span> Dossier de dépôt autorisé</span>
-          <span class="legend-item"><span class="color-box path"></span> Chemin d'accès</span>
+          <span class="legend-item"><span class="color-box allowed"></span> Dossier avec droits de dépot</span>
+          <span class="legend-item"><span class="color-box path"></span> Dossier Parent contenant dossier avec droits de dépot</span>
         </div>
         <ul id="folder-tree-root" class="folder-tree">
           <li>Chargement des dossiers...</li>
