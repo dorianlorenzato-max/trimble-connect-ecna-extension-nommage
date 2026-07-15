@@ -688,6 +688,7 @@ import {
     currentRuleState = {
       name: "",
       columns: [],
+      separator: "-",
       editMode: "normal",
       selectedColumnIndex: null,
     };
@@ -707,7 +708,8 @@ import {
       alert("Veuillez donner un nom à la codification.");
       return;
     }
-
+    currentRuleState.separator =
+      document.getElementById("separator-select").value;
     renderSaving(mainContentDiv);
 
     try {
@@ -1252,6 +1254,7 @@ import {
       currentRuleState = {
         name: ruleToEdit.name,
         columns: ruleToEdit.columns,
+        separator: ruleToEdit.separator || "-",
         editMode: "normal",
         selectedColumnIndex: null,
       };
@@ -1501,6 +1504,10 @@ import {
     document.getElementById("total-chars-all").textContent = allLength;
   }
   const rerenderPage = () => {
+    if (document.getElementById("separator-select")) {
+      currentRuleState.separator =
+        document.getElementById("separator-select").value;
+    }
     currentRuleState.name = document.getElementById("naming-rule-name").value;
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     updateCharacterCounts();
