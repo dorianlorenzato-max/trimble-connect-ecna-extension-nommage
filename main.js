@@ -545,7 +545,7 @@ import {
     updateNamingPreviewAndValidate(); // Appel sans argument
   }
 
-  function updateNamingPreviewAndValidate(convention) {
+  function updateNamingPreviewAndValidate() {
     // 1. Récupérer la convention depuis l'état global de la page
     const { convention, file } = helpCodificationState;
 
