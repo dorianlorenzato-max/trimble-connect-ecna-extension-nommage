@@ -537,18 +537,28 @@ import {
 
   function attachNamingZoneListeners(convention) {
     document.querySelectorAll(".naming-input").forEach((input) => {
-      input.addEventListener("input", () =>
-        updateNamingPreviewAndValidate(convention),
+      input.addEventListener(
+        "input",
+        () => updateNamingPreviewAndValidate(), // Appel sans argument
       );
     });
-    updateNamingPreviewAndValidate(convention);
+    updateNamingPreviewAndValidate(); // Appel sans argument
   }
 
   function updateNamingPreviewAndValidate(convention) {
+    // 1. Récupérer la convention depuis l'état global de la page
+    const { convention, file } = helpCodificationState;
+
+    // Sécurité : si la convention n'est pas chargée, on ne fait rien
+    if (!convention || !file) {
+      return;
+    }
+
     const previewSpan = document.getElementById("final-name-preview");
     const uploadBtn = document.getElementById("upload-document-btn");
     let finalNameParts = [];
     let isFormValid = true;
+
     convention.columns.forEach((colRule, index) => {
       const input = document.querySelector(
         `.naming-input[data-index="${index}"]`,
@@ -560,16 +570,24 @@ import {
       if (!validationResult.isValid) isFormValid = false;
       finalNameParts.push(value);
     });
-    const fileExtension = helpCodificationState.file.name.split(".").pop();
-    const finalName = finalNameParts.filter((part) => part !== "").join("-");
-    const finalNameWithExt = `${finalName}.${fileExtension}`;
+
+    // 2. Utiliser le séparateur de la convention, avec '-' comme valeur par défaut
+    const separator = convention.separator || "-";
+    const finalName = finalNameParts
+      .filter((part) => part !== "")
+      .join(separator);
+
     const finalNameCharCount = finalName.length;
     const charCountSpan = document.getElementById("final-name-char-count");
     if (charCountSpan) {
       charCountSpan.textContent = finalNameCharCount;
     }
+
+    const fileExtension = file.name.split(".").pop();
+    const finalNameWithExt = `${finalName}.${fileExtension}`;
+
     previewSpan.textContent = finalNameWithExt;
-    helpCodificationState.finalName = finalNameWithExt;
+    helpCodificationState.finalName = finalNameWithExt; // Le nom final est maintenant correct
     uploadBtn.disabled = !isFormValid;
   }
 
