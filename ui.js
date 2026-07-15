@@ -258,6 +258,13 @@ function renderCreateNamingRulePage(container, ruleData) {
             <label for="naming-rule-name">Affecter un nom à la convention de nommage :</label>
             <input type="text" id="naming-rule-name" value="${ruleData.name || ""}" placeholder="Ex: Convention principale">
         </div>
+        <div class="form-section" style="margin-top: 15px;">
+    <label for="separator-select">Séparateur entre les champs :</label>
+    <select id="separator-select" style="padding: 10px; border-radius: 5px; font-size: 1rem;">
+        <option value="-" ${(ruleData.separator || "-") === "-" ? "selected" : ""}>-</option>
+        <option value="_" ${ruleData.separator === "_" ? "selected" : ""} >_</option>
+    </select>
+</div>
 
         <div class="naming-rule-actions">
             <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
