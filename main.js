@@ -519,12 +519,18 @@ import {
       );
       if (!convention)
         throw new Error(`Convention "${conventionName}" introuvable.`);
+      helpCodificationState.convention = convention;
 
       renderNamingZone(namingZoneContainer, convention);
-      attachNamingZoneListeners(convention);
-      uploadBtn.disabled = false;
-      helpCodificationState.convention = convention;
-      //uploadBtn.addEventListener("click", () => handleFinalUpload(convention));
+      setTimeout(() => {
+        // Ce code ne s'exécutera qu'après que le navigateur ait "dessiné" les champs
+        const namingZone = document.getElementById("naming-zone-container");
+        // Sécurité : on vérifie que l'utilisateur n'a pas changé de page entre-temps
+        if (namingZone && namingZone.querySelector(".naming-zone")) {
+          attachNamingZoneListeners();
+          uploadBtn.disabled = false; // On active le bouton seulement quand tout est prêt
+        }
+      }, 0); // Un délai de 0ms suffit à décaler l'exécution
     } catch (error) {
       console.error(
         "Erreur lors de l'affichage de la zone de nommage :",
