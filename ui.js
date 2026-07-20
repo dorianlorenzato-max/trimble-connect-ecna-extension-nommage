@@ -147,18 +147,14 @@ function renderCreateNamingRulePage(container, ruleData) {
   const typeColorMap = {
     text: "#EBF5FB", // Bleu très clair
     list: "#E8F8F5", // Vert très clair
-    number1: "#FEF9E7", // Jaune très clair
-    number2: "#FEF9E7",
-    number3: "#FEF9E7",
+    numeric: "#FEF9E7", // Jaune très clair
     alphabetic: "#FDEDEC", // Rouge très clair
   };
 
   const typeNameMap = {
     text: "Texte libre",
     list: "Liste",
-    number1: "Numérique",
-    number2: "Numérique",
-    number3: "Numérique",
+    numeric: "Numérique",
     alphabetic: "Alphabétique",
   };
   // Définition du texte d'aide
@@ -379,7 +375,7 @@ function renderAddColumnModal(onConfirmCallback) {
                 <!-- Contrainte de longueur -->
                 <div id="length-constraint-section" class="form-section" style="display: none;">
                     <label for="length-constraint-type">Contrainte de longueur</label>
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <select id="length-constraint-type">
                             <option value="none">Aucune</option>
                             <option value="exact">Exactement</option>
@@ -853,12 +849,45 @@ function renderNamingZone(container, convention) {
     trigram: "3 lettres (ex: ARC)",
   };
   const createPlaceholder = (col) => {
-    let basePlaceholder = typeDisplayMap[col.type] || "";
-    if (col.type === "text" && col.maxLength) {
-      basePlaceholder += ` (max. ${col.maxLength} car.)`;
+    let parts = [];
+    switch (col.type) {
+      case "numeric":
+        parts.push("ex: 123");
+        break;
+      case "alphabetic":
+        parts.push("ex: ABC");
+        break;
+      case "text":
+        parts.push("Texte libre");
+        break;
+      case "list":
+        parts.push("Sélectionner...");
+        break;
     }
-    return basePlaceholder;
+
+    if (col.lengthConstraint && col.lengthConstraint.type !== "none") {
+      const lc = col.lengthConstraint;
+      switch (lc.type) {
+        case "exact":
+          parts.push(`long. ${lc.value1}`);
+          break;
+        case "min":
+          parts.push(`min. ${lc.value1} car.`);
+          break;
+        case "max":
+          parts.push(`max. ${lc.value1} car.`);
+          break;
+        case "range":
+          parts.push(`${lc.value1}-${lc.value2} car.`);
+          break;
+      }
+    }
+    if (col.case === "upper") parts.push("Maj");
+    if (col.case === "lower") parts.push("Min");
+
+    return parts.join(", ");
   };
+
   const fieldsHtml = convention.columns
     .map((col, index) => {
       const placeholder = createPlaceholder(col);
@@ -871,7 +900,7 @@ function renderNamingZone(container, convention) {
         const options = col.values
           .map(
             (v) =>
-              `<option value="${v.value}" title="${v.description}">${v.value} - ${v.description}</option>`,
+              `<option value="${v.value}" title="${v.description}">${v.value}</option>`,
           )
           .join("");
         inputHtml = `<select class="naming-input" data-index="${index}">
