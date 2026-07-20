@@ -188,7 +188,6 @@ function renderCreateNamingRulePage(container, ruleData) {
                 ? `<span class="delete-column-icon" data-column-index="${index}">&#128465;</span>`
                 : "";
 
-            // Création de la ligne d'information
             let constraints = [];
             if (col.required) constraints.push("Obligatoire");
             if (col.maxLength) constraints.push(`Max. ${col.maxLength} car.`);
@@ -197,21 +196,44 @@ function renderCreateNamingRulePage(container, ruleData) {
                 ? `<div style="color: #005a70; font-style: italic; font-size: 0.8em; margin-bottom: 4px;">${constraints.join(", ")}</div>`
                 : "";
 
+            // --- Logique pour les contrôles de séparateur ---
+            let separatorControlsHtml = "";
+            if (index < ruleData.columns.length - 1) {
+              const currentSeparator = col.separator;
+              const isChecked = currentSeparator !== null;
+
+              separatorControlsHtml = `
+                  <div class="separator-controls" style="position: absolute; top: 5px; right: -25px; z-index: 10;">
+                      <label style="font-size: 0.8em; display: block; text-align: center; margin-bottom: 2px;">Séparateur</label>
+                      <input type="checkbox" class="separator-checkbox" data-col-index="${index}" ${isChecked ? "checked" : ""}>
+                      <select class="separator-select" data-col-index="${index}" ${!isChecked ? "disabled" : ""}>
+                          <option value="-" ${currentSeparator === "-" ? "selected" : ""}>-</option>
+                          <option value="_" ${currentSeparator === "_" ? "selected" : ""}>_</option>
+                          <option value="." ${currentSeparator === "." ? "selected" : ""}>.</option>
+                      </select>
+                  </div>
+              `;
+            }
+            // --- Fin de la logique ---
+
             const isSelected = ruleData.selectedColumnIndex === index;
             const thClass = `
-                    ${ruleData.editMode === "normal" ? "clickable-header" : ""}
-                    ${isSelected ? "selected" : ""}
-                    ${ruleData.editMode === "select_for_edit" ? "clickable-header" : ""}
-                    ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
-                    ${col.markedForDeletion ? "marked-for-deletion" : ""}
-                `;
-
+              ${ruleData.editMode === "normal" ? "clickable-header" : ""}
+              ${isSelected ? "selected" : ""}
+              ${ruleData.editMode === "select_for_edit" ? "clickable-header" : ""}
+              ${ruleData.editMode === "reorder" ? "draggable-column" : ""}
+              ${col.markedForDeletion ? "marked-for-deletion" : ""}
+          `;
             const bgColor = typeColorMap[col.type] || "";
 
-            return `<th class="${thClass}" style="background-color: ${bgColor};">
-                            ${constraintText}
-                            <div class="th-content-wrapper">${deleteIcon}${col.name}</div>
-                        </th>`;
+            // On ajoute un padding à droite pour faire de la place aux contrôles
+            const style = `background-color: ${bgColor}; position: relative; padding-right: 60px;`;
+
+            return `<th class="${thClass}" style="${style}">
+                      ${constraintText}
+                      <div class="th-content-wrapper">${deleteIcon}${col.name}</div>
+                      ${separatorControlsHtml}
+                  </th>`;
           })
           .join("")
       : "<th>(Aucune colonne)</th>";
@@ -258,14 +280,7 @@ function renderCreateNamingRulePage(container, ruleData) {
             <label for="naming-rule-name">Affecter un nom à la convention de nommage :</label>
             <input type="text" id="naming-rule-name" value="${ruleData.name || ""}" placeholder="Ex: Convention principale">
         </div>
-        <div class="form-section" style="margin-top: 15px;">
-    <label for="separator-select">Séparateur entre les champs :</label>
-    <select id="separator-select" style="padding: 10px; border-radius: 5px; font-size: 1rem;">
-        <option value="-" ${(ruleData.separator || "-") === "-" ? "selected" : ""}>-</option>
-        <option value="_" ${ruleData.separator === "_" ? "selected" : ""} >_</option>
-    </select>
-</div>
-
+        
         <div class="naming-rule-actions">
             <button id="add-column-btn" class="button-secondary">Ajouter une colonne</button>
             ${editButtonHtml}
@@ -704,7 +719,18 @@ function renderNamingControlTable(documents, conventionRules) {
     .map((doc) => {
       // On doit transformer le nom en majuscules AVANT de le séparer si la règle est 'trigram'
       const nameForParsing = doc.name.replace(/\.[^/.]+$/, ""); // Enlève l'extension
-      const parts = nameForParsing.split("-");
+      // Créer une expression régulière basée sur tous les séparateurs possibles dans la convention
+      const usedSeparators = conventionRules.columns
+        .map((c) => c.separator)
+        .filter((sep) => sep === "-" || sep === "_" || sep === "."); // Filtre pour la sécurité
+
+      const uniqueSeparators = [...new Set(usedSeparators)];
+
+      // Si aucun séparateur n'est utilisé, on ne peut pas splitter.
+      const parts =
+        uniqueSeparators.length > 0
+          ? nameForParsing.split(new RegExp(`[${uniqueSeparators.join("")}]`))
+          : [nameForParsing];
 
       const cells = conventionRules.columns
         .map((colRule, index) => {
@@ -825,16 +851,11 @@ function renderNamingZone(container, convention) {
         inputHtml = `<input type="text" class="naming-input" data-index="${index}" placeholder="${placeholder}">`;
       }
 
-      const separator =
-        index < convention.columns.length - 1
-          ? '<span class="separator">-</span>'
-          : "";
-
       return `
       <div class="naming-field-wrapper">
         <label>${col.name}${isRequired}</label>
         <div class="naming-field">
-          ${inputHtml}${separator}
+          ${inputHtml}
         </div>
       </div>
     `;
