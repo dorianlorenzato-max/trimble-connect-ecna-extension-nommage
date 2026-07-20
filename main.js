@@ -287,16 +287,19 @@ import {
         documentsByConvention[doc.conventionName].push(doc);
       });
       renderControlPage(mainContentDiv, documentsByConvention, allRules);
-      document
-        .getElementById("export-pdf-btn")
-        .addEventListener("click", () =>
+      const exportPdfBtn = document.getElementById("export-pdf-btn");
+      if (exportPdfBtn) {
+        exportPdfBtn.addEventListener("click", () =>
           handleExportControlPDF(documentsByConvention, allRules),
         );
-      document
-        .getElementById("export-excel-btn")
-        .addEventListener("click", () =>
+      }
+
+      const exportExcelBtn = document.getElementById("export-excel-btn");
+      if (exportExcelBtn) {
+        exportExcelBtn.addEventListener("click", () =>
           handleExportControlExcel(documentsByConvention, allRules),
         );
+      }
     } catch (error) {
       console.error(
         "Erreur lors du chargement de la page de contrôle :",
