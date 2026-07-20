@@ -702,7 +702,12 @@ function validatePart(value, rule) {
   }
 }
 
-function renderControlPage(container, documentsByConvention, allRules) {
+function renderControlPage(
+  container,
+  documentsByConvention,
+  allRules,
+  smartParser,
+) {
   if (Object.keys(documentsByConvention).length === 0) {
     container.innerHTML =
       "<h1>Contrôle des Nommages</h1><p>Aucun document trouvé dans les dossiers configurés.</p>";
@@ -726,14 +731,14 @@ function renderControlPage(container, documentsByConvention, allRules) {
     html += `
       <div class="control-convention-section">
         <h2>Convention : ${conventionName}</h2>
-        ${renderNamingControlTable(documents, conventionRules)}
+        ${renderNamingControlTable(documents, conventionRules, smartParser)}
       </div>
     `;
   }
   container.innerHTML = html;
 }
 
-function renderNamingControlTable(documents, conventionRules) {
+function renderNamingControlTable(documents, conventionRules, smartParser) {
   if (!conventionRules || conventionRules.columns.length === 0) {
     return "<p>Cette convention n'a pas de colonnes définies.</p>";
   }
@@ -747,34 +752,18 @@ function renderNamingControlTable(documents, conventionRules) {
       // On doit transformer le nom en majuscules AVANT de le séparer si la règle est 'trigram'
       const nameForParsing = doc.name.replace(/\.[^/.]+$/, ""); // Enlève l'extension
       // Créer une expression régulière basée sur tous les séparateurs possibles dans la convention
-      const usedSeparators = conventionRules.columns
-        .map((c) => c.separator)
-        .filter((sep) => sep === "-" || sep === "_" || sep === "."); // Filtre pour la sécurité
+      const parts = smartParser(nameForParsing, conventionRules);
 
-      const uniqueSeparators = [...new Set(usedSeparators)];
-
-      // Si aucun séparateur n'est utilisé, on ne peut pas splitter.
-      const parts =
-        uniqueSeparators.length > 0
-          ? nameForParsing.split(new RegExp(`[${uniqueSeparators.join("")}]`))
-          : [nameForParsing];
-
-      const cells = conventionRules.columns
-        .map((colRule, index) => {
-          let value = parts[index] || "";
-
-          // Pour les trigrammes, on s'assure que la valeur de comparaison est en majuscule
-          if (colRule.type === "trigram") {
-            value = value.toUpperCase();
-          }
-
-          const validationResult = validatePart(value, colRule);
+      const cells = parts
+        .map((partValue, index) => {
+          const colRule = conventionRules.columns[index];
+          const validationResult = validatePart(partValue, colRule);
           const cellClass = validationResult.isValid ? "" : "invalid-cell";
           const tooltipTitle = validationResult.isValid
             ? ""
             : `title="${validationResult.reason}"`;
 
-          return `<td class="${cellClass}" ${tooltipTitle}>${value}</td>`;
+          return `<td class="${cellClass}" ${tooltipTitle}>${partValue}</td>`;
         })
         .join("");
 
