@@ -286,7 +286,12 @@ import {
         }
         documentsByConvention[doc.conventionName].push(doc);
       });
-      renderControlPage(mainContentDiv, documentsByConvention, allRules);
+      renderControlPage(
+        mainContentDiv,
+        documentsByConvention,
+        allRules,
+        smartParseFileName,
+      );
       const exportPdfBtn = document.getElementById("export-pdf-btn");
       if (exportPdfBtn) {
         exportPdfBtn.addEventListener("click", () =>
@@ -931,29 +936,17 @@ import {
       ];
       const body = documentsByConvention[conventionName].map((doc) => {
         const nameForParsing = doc.name.replace(/\.[^/.]+$/, "");
-        const usedSeparators = conventionRules.columns
-          .map((c) => c.separator)
-          .filter((sep) => sep === "-" || sep === "_" || sep === ".");
-
-        const uniqueSeparators = [...new Set(usedSeparators)];
-
-        const parts =
-          uniqueSeparators.length > 0
-            ? nameForParsing.split(new RegExp(`[${uniqueSeparators.join("")}]`))
-            : [nameForParsing];
+        const parts = smartParseFileName(nameForParsing, conventionRules);
         const row = [doc.depositor];
-
-        conventionRules.columns.forEach((colRule, index) => {
-          let value = parts[index] || "";
-          if (colRule.type === "trigram") value = value.toUpperCase();
-
-          const validationResult = validatePart(value, colRule);
+        parts.forEach((partValue, index) => {
+          const colRule = conventionRules.columns[index];
+          const validationResult = validatePart(partValue, colRule);
           if (validationResult.isValid) {
-            row.push(value);
+            row.push(partValue);
           } else {
             row.push({
-              content: value,
-              styles: { fillColor: [253, 222, 222] }, // Rouge pâle
+              content: partValue || "[VIDE]", // Affiche [VIDE] si la partie est vide mais invalide
+              styles: { fillColor: [253, 222, 222] },
             });
           }
         });
@@ -991,18 +984,16 @@ import {
       csvRows.push(headers.join(";"));
 
       documentsByConvention[conventionName].forEach((doc) => {
-        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const nameForParsing = doc.name.replace(/\.[^/.]+$/, "");
+        const parts = smartParseFileName(nameForParsing, conventionRules);
         const row = [doc.depositor];
-
-        conventionRules.columns.forEach((colRule, index) => {
-          let value = parts[index] || "";
-          if (colRule.type === "trigram") value = value.toUpperCase();
-
-          const validationResult = validatePart(value, colRule);
+        parts.forEach((partValue, index) => {
+          const colRule = conventionRules.columns[index];
+          const validationResult = validatePart(partValue, colRule);
           if (validationResult.isValid) {
-            row.push(`"${value}"`); // Mettre entre guillemets pour éviter les problèmes avec les virgules
+            row.push(`"${partValue}"`);
           } else {
-            row.push(`"[ERREUR] ${value}"`);
+            row.push(`"[ERREUR] ${partValue || "[VIDE]"}"`);
           }
         });
         csvRows.push(row.join(";"));
@@ -1668,6 +1659,52 @@ import {
     }
     return finalName;
   }
+  // === DÉBUT DE L'AJOUT : Analyseur de nom de fichier intelligent ===
+  function smartParseFileName(filename, convention) {
+    // 1. Découper le nom de fichier par tous les séparateurs possibles
+    const parts = filename.split(/[-._]/);
+    const columns = convention.columns;
+    const result = [];
+    let partIndex = 0; // Notre curseur pour les parties du nom
+
+    for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+      const column = columns[colIndex];
+
+      // S'il n'y a plus de parties dans le nom, on remplit le reste avec du vide
+      if (partIndex >= parts.length) {
+        result.push("");
+        continue;
+      }
+
+      const currentPart = parts[partIndex];
+      const isMatch = validatePart(currentPart, column).isValid;
+
+      // 2. La logique clé : décider s'il faut ignorer une colonne optionnelle
+      // On calcule combien de colonnes obligatoires il reste après celle-ci
+      const remainingMandatoryCols = columns
+        .slice(colIndex + 1)
+        .filter((c) => c.required).length;
+      const remainingParts = parts.length - partIndex;
+
+      // On ignore la colonne optionnelle si :
+      // a) la partie actuelle ne correspond pas, OU
+      // b) la partie correspond, mais le nombre de parties restantes est exactement égal au nombre de colonnes obligatoires restantes (ce qui signifie que cette partie EST pour une future colonne obligatoire)
+      const mustSkipOptional =
+        !column.required &&
+        (!isMatch ||
+          (isMatch && remainingParts === remainingMandatoryCols + 1));
+
+      if (mustSkipOptional) {
+        result.push(""); // On ignore la colonne
+        // On ne déplace PAS le curseur partIndex, pour retester la même partie avec la colonne suivante
+      } else {
+        result.push(currentPart); // On attribue la partie
+        partIndex++; // On déplace le curseur pour passer à la partie suivante
+      }
+    }
+    return result;
+  }
+  // === FIN DE L'AJOUT ===
   const rerenderPage = () => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
