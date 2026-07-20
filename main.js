@@ -32,7 +32,6 @@ import {
   renderControlPage,
   renderHelpCodificationPage,
   renderNamingZone,
-  renderEditColumnModal,
 } from "./ui.js";
 
 // Exécution dans une fonction auto-appelée pour ne pas polluer l'espace global
@@ -806,67 +805,89 @@ import {
   }
   // ----------------------------------
   function validatePart(value, rule) {
-    // 1. Gérer le cas "non obligatoire"
-    if (
-      rule.type === "text" &&
-      rule.maxLength &&
-      value.length > rule.maxLength
-    ) {
-      return {
-        isValid: false,
-        reason: `Doit contenir au maximum ${rule.maxLength} caractères.`,
-      };
-    }
-    if (!rule.required && !value) {
-      return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
-    }
+    value = value || ""; // S'assurer que la valeur n'est pas null/undefined
 
-    // 2. Gérer le cas "obligatoire" mais vide
-    if (rule.required && !value) {
+    // Gérer le cas "obligatoire" mais vide
+    if (rule.required && value === "") {
       return { isValid: false, reason: "Valeur obligatoire manquante" };
     }
 
-    // 3. Validation par type
-    switch (rule.type) {
-      case "text":
-        return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
-      case "list":
-        const isValid = rule.values.some((v) => v.value === value);
-        return {
-          isValid,
-          reason: isValid
-            ? ""
-            : `La valeur "${value}" n'est pas dans la liste autorisée.`,
-        };
-      case "number1":
-        const isNumber1 = /^\d{1}$/.test(value);
-        return {
-          isValid: isNumber1,
-          reason: isNumber1 ? "" : "Doit être un chiffre unique.",
-        };
-      case "number2":
-        const isNumber2 = /^\d{2}$/.test(value);
-        return {
-          isValid: isNumber2,
-          reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
-        };
-      case "number3":
-        const isNumber3 = /^\d{3}$/.test(value);
-        return {
-          isValid: isNumber3,
-          reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
-        };
-      case "trigram":
-        const isTrigram = /^[A-Z]{3}$/.test(value);
-        return {
-          isValid: isTrigram,
-          reason: isTrigram
-            ? ""
-            : "Doit être un trigramme en majuscules (3 lettres).",
-        };
-      default:
-        return { isValid: true }; // Type inconnu, on ne bloque pas
+    // Si non-obligatoire et vide, c'est toujours valide
+    if (!rule.required && value === "") {
+      return { isValid: true };
     }
+
+    // Validation par type
+    switch (rule.type) {
+      case "numeric":
+        if (!/^\d+$/.test(value)) {
+          return {
+            isValid: false,
+            reason: "Doit contenir uniquement des chiffres.",
+          };
+        }
+        break;
+      case "alphabetic":
+        if (!/^[a-zA-Z]+$/.test(value)) {
+          return {
+            isValid: false,
+            reason: "Doit contenir uniquement des lettres.",
+          };
+        }
+        if (rule.case === "upper" && value !== value.toUpperCase()) {
+          return { isValid: false, reason: "Doit être en majuscules." };
+        }
+        if (rule.case === "lower" && value !== value.toLowerCase()) {
+          return { isValid: false, reason: "Doit être en minuscules." };
+        }
+        break;
+      case "list":
+        if (!rule.values.some((v) => v.value === value)) {
+          return {
+            isValid: false,
+            reason: `La valeur "${value}" n'est pas dans la liste autorisée.`,
+          };
+        }
+        break;
+    }
+
+    // Validation par longueur
+    if (rule.lengthConstraint && rule.lengthConstraint.type !== "none") {
+      const lc = rule.lengthConstraint;
+      const len = value.length;
+      switch (lc.type) {
+        case "exact":
+          if (len !== lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir exactement ${lc.value1} caractères.`,
+            };
+          break;
+        case "min":
+          if (len < lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir au moins ${lc.value1} caractères.`,
+            };
+          break;
+        case "max":
+          if (len > lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir au plus ${lc.value1} caractères.`,
+            };
+          break;
+        case "range":
+          if (len < lc.value1 || len > lc.value2)
+            return {
+              isValid: false,
+              reason: `Doit avoir entre ${lc.value1} et ${lc.value2} caractères.`,
+            };
+          break;
+      }
+    }
+
+    return { isValid: true }; // Si toutes les validations passent
   }
   async function handleManageNamingRulesClick() {
     renderLoading(mainContentDiv);
@@ -1357,14 +1378,13 @@ import {
   const onColumnEdit = (updatedColumn) => {
     if (currentRuleState.selectedColumnIndex === null) return;
 
-    // On remplace l'ancienne colonne par la nouvelle à l'index sélectionné
-    currentRuleState.columns.splice(
-      currentRuleState.selectedColumnIndex,
-      1,
+    // La logique de sauvegarde est maintenant dans la modale, mais on doit mettre à jour l'état
+    Object.assign(
+      currentRuleState.columns[currentRuleState.selectedColumnIndex],
       updatedColumn,
     );
 
-    currentRuleState.selectedColumnIndex = null; // On désélectionne après modification
+    currentRuleState.selectedColumnIndex = null;
     rerenderPage();
   };
   function attachCreatePageListeners() {
@@ -1425,12 +1445,67 @@ import {
         .forEach((header, index) => {
           header.addEventListener("click", () => {
             currentRuleState.selectedColumnIndex = index;
-            currentRuleState.name =
-              document.getElementById("naming-rule-name").value;
-            const columnToEdit = currentRuleState.columns[index];
+            const columnToEdit = { ...currentRuleState.columns[index] }; // Copie pour éviter la mutation directe
 
-            // On affiche la modale d'édition et on lui passe le callback
-            renderEditColumnModal(columnToEdit, onColumnEdit);
+            // On appelle la modale d'ajout, mais on lui passe le callback d'édition
+            renderAddColumnModal((updatedColumn) => {
+              onColumnEdit(updatedColumn);
+            });
+
+            // PRÉ-REMPLISSAGE de la modale qui vient d'être créée
+            const modalOverlay = document.getElementById(
+              "add-column-modal-overlay",
+            );
+            modalOverlay.querySelector("h2").textContent =
+              "Modifier la colonne";
+            modalOverlay.querySelector("#confirm-add-column-btn").textContent =
+              "Appliquer les modifications";
+
+            modalOverlay.querySelector("#column-name").value =
+              columnToEdit.name;
+            modalOverlay.querySelector("#column-type-select").value =
+              columnToEdit.type;
+            modalOverlay.querySelector(
+              `input[name="column-required"][value="${columnToEdit.required ? "yes" : "no"}"]`,
+            ).checked = true;
+
+            // Pré-remplir les contraintes
+            if (columnToEdit.lengthConstraint) {
+              const lc = columnToEdit.lengthConstraint;
+              modalOverlay.querySelector("#length-constraint-type").value =
+                lc.type;
+              modalOverlay.querySelector("#length-value1").value =
+                lc.value1 || "";
+              modalOverlay.querySelector("#length-value2").value =
+                lc.value2 || "";
+            }
+            if (columnToEdit.case) {
+              modalOverlay.querySelector("#case-constraint-select").value =
+                columnToEdit.case;
+            }
+
+            // Pré-remplir la liste
+            if (
+              columnToEdit.type === "list" &&
+              columnToEdit.values.length > 0
+            ) {
+              const tableBody = modalOverlay.querySelector(
+                "#list-values-table tbody",
+              );
+              tableBody.innerHTML = "";
+              columnToEdit.values.forEach((v) => {
+                const row = tableBody.insertRow();
+                row.innerHTML = `<td><input type="text" value="${v.value}"></td><td><input type="text" value="${v.description}"></td>`;
+              });
+            }
+
+            // Déclencher les événements pour afficher les bonnes sections
+            modalOverlay
+              .querySelector("#column-type-select")
+              .dispatchEvent(new Event("change"));
+            modalOverlay
+              .querySelector("#length-constraint-type")
+              .dispatchEvent(new Event("change"));
           });
         });
     }
@@ -1495,48 +1570,48 @@ import {
   }
   //  Fonction de calcul de la longueur de la convention ===
   function calculateConventionLength(columns) {
-    if (!columns || columns.length === 0) {
-      return 0;
-    }
+    if (!columns || columns.length === 0) return 0;
 
     let totalLength = 0;
     let isUnlimited = false;
 
     columns.forEach((column) => {
-      switch (column.type) {
-        case "number1":
-          totalLength += 1;
-          break;
-        case "number2":
-          totalLength += 2;
-          break;
-        case "number3":
-        case "trigram":
-          totalLength += 3;
-          break;
-        case "list":
-          const maxLengthInList =
-            column.values.length > 0
-              ? Math.max(...column.values.map((v) => v.value.length))
-              : 0;
-          totalLength += maxLengthInList;
-          break;
-        case "text":
-          if (column.maxLength) {
-            totalLength += column.maxLength;
-          } else {
-            isUnlimited = true;
-          }
-          break;
+      // Longueur du champ
+      if (
+        column.lengthConstraint &&
+        (column.lengthConstraint.type === "exact" ||
+          column.lengthConstraint.type === "max")
+      ) {
+        totalLength += column.lengthConstraint.value1;
+      } else if (
+        column.lengthConstraint &&
+        column.lengthConstraint.type === "range"
+      ) {
+        totalLength += column.lengthConstraint.value2; // On prend la borne max pour l'estimation
+      } else if (column.type === "list") {
+        totalLength +=
+          column.values.length > 0
+            ? Math.max(...column.values.map((v) => v.value.length))
+            : 0;
+      } else {
+        isUnlimited = true; // Si c'est min, none, ou texte libre sans contrainte max
+      }
+
+      // Longueur du séparateur (si présent)
+      if (column.separator) {
+        totalLength += 1;
       }
     });
+
+    // On retire le dernier séparateur qui n'existera pas
+    const lastCol = columns[columns.length - 1];
+    if (lastCol && lastCol.separator) {
+      totalLength -= 1;
+    }
 
     if (isUnlimited) {
       return "Pas de contraintes de caractères maximum";
     }
-
-    // Ajout des séparateurs
-    totalLength += Math.max(0, columns.length - 1);
 
     return totalLength;
   }
