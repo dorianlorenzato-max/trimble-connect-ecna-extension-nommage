@@ -579,9 +579,7 @@ import {
 
     // 2. Utiliser le séparateur de la convention, avec '-' comme valeur par défaut
     const separator = convention.separator || "-";
-    const finalName = finalNameParts
-      .filter((part) => part !== "")
-      .join(separator);
+    const finalName = buildFinalName(convention.columns, finalNameParts);
 
     const finalNameCharCount = finalName.length;
     const charCountSpan = document.getElementById("final-name-char-count");
@@ -712,7 +710,6 @@ import {
     currentRuleState = {
       name: "",
       columns: [],
-      separator: "-",
       editMode: "normal",
       selectedColumnIndex: null,
     };
@@ -732,8 +729,7 @@ import {
       alert("Veuillez donner un nom à la codification.");
       return;
     }
-    currentRuleState.separator =
-      document.getElementById("separator-select").value;
+
     renderSaving(mainContentDiv);
 
     try {
@@ -910,7 +906,17 @@ import {
         ["Dépositaire", ...conventionRules.columns.map((c) => c.name)],
       ];
       const body = documentsByConvention[conventionName].map((doc) => {
-        const parts = doc.name.replace(/\.[^/.]+$/, "").split("-");
+        const nameForParsing = doc.name.replace(/\.[^/.]+$/, "");
+        const usedSeparators = conventionRules.columns
+          .map((c) => c.separator)
+          .filter((sep) => sep === "-" || sep === "_" || sep === ".");
+
+        const uniqueSeparators = [...new Set(usedSeparators)];
+
+        const parts =
+          uniqueSeparators.length > 0
+            ? nameForParsing.split(new RegExp(`[${uniqueSeparators.join("")}]`))
+            : [nameForParsing];
         const row = [doc.depositor];
 
         conventionRules.columns.forEach((colRule, index) => {
@@ -1273,12 +1279,14 @@ import {
 
       // On passe en mode édition
       originalRuleNameToEdit = ruleNameToEdit;
-
+      const processedColumns = ruleToEdit.columns.map((col) => ({
+        ...col,
+        separator: col.separator === undefined ? "-" : col.separator, // Par défaut, on met '-' si la propriété n'existe pas
+      }));
       // On initialise l'état avec les données de la règle à modifier
       currentRuleState = {
         name: ruleToEdit.name,
-        columns: ruleToEdit.columns,
-        separator: ruleToEdit.separator || "-",
+        columns: processedColumns,
         editMode: "normal",
         selectedColumnIndex: null,
       };
@@ -1341,6 +1349,7 @@ import {
 
   const onColumnAdd = (newColumn) => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
+    newColumn.separator = "-";
     currentRuleState.columns.push(newColumn);
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     attachCreatePageListeners();
@@ -1369,6 +1378,29 @@ import {
     document.getElementById("add-column-btn").addEventListener("click", () => {
       currentRuleState.name = document.getElementById("naming-rule-name").value;
       renderAddColumnModal(onColumnAdd);
+    });
+    // === Écouteurs pour les contrôles de séparateur ===
+    document.querySelectorAll(".separator-checkbox").forEach((checkbox) => {
+      checkbox.addEventListener("change", (event) => {
+        const index = parseInt(event.target.dataset.colIndex, 10);
+        const select = document.querySelector(
+          `.separator-select[data-col-index="${index}"]`,
+        );
+        if (event.target.checked) {
+          select.disabled = false;
+          currentRuleState.columns[index].separator = select.value;
+        } else {
+          select.disabled = true;
+          currentRuleState.columns[index].separator = null;
+        }
+      });
+    });
+
+    document.querySelectorAll(".separator-select").forEach((select) => {
+      select.addEventListener("change", (event) => {
+        const index = parseInt(event.target.dataset.colIndex, 10);
+        currentRuleState.columns[index].separator = event.target.value;
+      });
     });
     // Logique pour le nouveau bouton "Modifier"
     const editBtn = document.getElementById("edit-column-btn");
@@ -1527,11 +1559,38 @@ import {
       requiredLength;
     document.getElementById("total-chars-all").textContent = allLength;
   }
-  const rerenderPage = () => {
-    if (document.getElementById("separator-select")) {
-      currentRuleState.separator =
-        document.getElementById("separator-select").value;
+  // === Fonction de construction du nom de fichier dynamique ===
+  function buildFinalName(columns, values) {
+    // 1. Filtrer pour ne garder que les parties qui ont une valeur
+    const effectiveParts = [];
+    for (let i = 0; i < values.length; i++) {
+      const value = (values[i] || "").trim();
+      if (value !== "") {
+        effectiveParts.push({
+          value: value,
+          originalIndex: i, // On garde l'index original pour trouver la règle du séparateur
+        });
+      }
     }
+
+    if (effectiveParts.length === 0) return "";
+
+    // 2. Construire la chaîne finale
+    let finalName = "";
+    for (let i = 0; i < effectiveParts.length; i++) {
+      finalName += effectiveParts[i].value;
+
+      // S'il y a une partie suivante, on ajoute le séparateur de la partie actuelle
+      if (i < effectiveParts.length - 1) {
+        const originalRule = columns[effectiveParts[i].originalIndex];
+        if (originalRule && originalRule.separator) {
+          finalName += originalRule.separator;
+        }
+      }
+    }
+    return finalName;
+  }
+  const rerenderPage = () => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
     renderCreateNamingRulePage(mainContentDiv, currentRuleState);
     updateCharacterCounts();
