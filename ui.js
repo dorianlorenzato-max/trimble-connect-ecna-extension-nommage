@@ -150,7 +150,7 @@ function renderCreateNamingRulePage(container, ruleData) {
     number1: "#FEF9E7", // Jaune très clair
     number2: "#FEF9E7",
     number3: "#FEF9E7",
-    trigram: "#FDEDEC", // Rouge très clair
+    alphabetic: "#FDEDEC", // Rouge très clair
   };
 
   const typeNameMap = {
@@ -159,7 +159,7 @@ function renderCreateNamingRulePage(container, ruleData) {
     number1: "Numérique",
     number2: "Numérique",
     number3: "Numérique",
-    trigram: "Trigramme",
+    alphabetic: "Alphabétique",
   };
   // Définition du texte d'aide
   let editModeDescription = "";
@@ -190,7 +190,29 @@ function renderCreateNamingRulePage(container, ruleData) {
 
             let constraints = [];
             if (col.required) constraints.push("Obligatoire");
-            if (col.maxLength) constraints.push(`Max. ${col.maxLength} car.`);
+
+            if (col.lengthConstraint && col.lengthConstraint.type !== "none") {
+              const lc = col.lengthConstraint;
+              switch (lc.type) {
+                case "exact":
+                  constraints.push(`Exact. ${lc.value1} car.`);
+                  break;
+                case "min":
+                  constraints.push(`Min. ${lc.value1} car.`);
+                  break;
+                case "max":
+                  constraints.push(`Max. ${lc.value1} car.`);
+                  break;
+                case "range":
+                  constraints.push(`${lc.value1}-${lc.value2} car.`);
+                  break;
+              }
+            }
+            if (col.case && col.case !== "any") {
+              constraints.push(
+                col.case === "upper" ? "Majuscules" : "Minuscules",
+              );
+            }
             const constraintText =
               constraints.length > 0
                 ? `<div style="color: #005a70; font-style: italic; font-size: 0.8em; margin-bottom: 4px;">${constraints.join(", ")}</div>`
@@ -319,202 +341,211 @@ function renderCreateNamingRulePage(container, ruleData) {
 // fonction pour créer une colonne de nommage
 
 function renderAddColumnModal(onConfirmCallback) {
-  // Crée l'overlay et le contenu de la modale
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
   modalOverlay.id = "add-column-modal-overlay";
 
   modalOverlay.innerHTML = `
-    <div class="modal-content">
-        <h2>Ajouter une nouvelle colonne</h2>
+        <div class="modal-content">
+            <h2>Ajouter une nouvelle colonne</h2>
 
-        <div class="modal-form-grid">
-            <div class="form-group">
-                <label for="column-name">Nom de la colonne</label>
-                <input type="text" id="column-name" placeholder="Ex: Phase">
-            </div>
-
-            <div class="form-group">
-                <label>Type de données</label>
-                <div class="checkbox-group">
-                    <label><input type="radio" name="column-type" value="text"> Texte libre</label>
-                    <label><input type="radio" name="column-type" value="list"> Liste</label>
-                    <label><input type="radio" name="column-type" value="number1"> 1 chiffre</label>
-                    <label><input type="radio" name="column-type" value="number2"> 2 chiffres</label>
-                    <label><input type="radio" name="column-type" value="number3"> 3 chiffres</label>
-                    <label><input type="radio" name="column-type" value="trigram"> Trigramme</label>
+            <!-- === Section 1: Informations de base === -->
+            <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="column-name">Nom de la colonne</label>
+                    <input type="text" id="column-name" placeholder="Ex: Phase">
+                </div>
+                <div class="form-group">
+                    <label>Type de données</label>
+                    <select id="column-type-select" class="form-control">
+                        <option value="text">Texte Libre</option>
+                        <option value="list">Liste</option>
+                        <option value="numeric">Numérique</option>
+                        <option value="alphabetic">Alphabétique</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Obligatoire</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="column-required" value="yes" checked> Oui</label>
+                        <label><input type="radio" name="column-required" value="no"> Non</label>
+                    </div>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>Obligatoire</label>
-                <div class="checkbox-group">
-                    <label><input type="radio" name="column-required" value="yes" checked> Oui</label>
-                    <label><input type="radio" name="column-required" value="no"> Non</label>
+            <!-- === Section 2: Contraintes (conditionnelles) === -->
+            <div id="constraints-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                
+                <!-- Contrainte de longueur -->
+                <div id="length-constraint-section" class="form-section" style="display: none;">
+                    <label for="length-constraint-type">Contrainte de longueur</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <select id="length-constraint-type">
+                            <option value="none">Aucune</option>
+                            <option value="exact">Exactement</option>
+                            <option value="min">Minimum</option>
+                            <option value="max">Maximum</option>
+                            <option value="range">Entre</option>
+                        </select>
+                        <input type="number" id="length-value1" min="1" style="width: 70px; display: none;">
+                        <span id="length-range-separator" style="display: none;">et</span>
+                        <input type="number" id="length-value2" min="1" style="width: 70px; display: none;">
+                    </div>
+                </div>
+
+                <!-- Contrainte de casse -->
+                <div id="case-constraint-section" class="form-section" style="display: none;">
+                    <label for="case-constraint-select">Contrainte de casse</label>
+                    <select id="case-constraint-select">
+                        <option value="any">Indifférent</option>
+                        <option value="upper">Majuscules uniquement</option>
+                        <option value="lower">Minuscules uniquement</option>
+                    </select>
                 </div>
             </div>
-        </div>
-<div id="max-length-section" class="form-section" style="display: none; margin-top: 15px;">
-    <label>
-        <input type="checkbox" id="apply-max-length-checkbox">
-        Appliquer un nombre de caractères maximum
-    </label>
-    <select id="max-length-select" disabled style="margin-top: 5px; width: auto;">
-        <!-- Les options de 1 à 40 seront générées par le JS -->
-    </select>
-</div>
 
-        <!-- Section pour la liste, initialement cachée -->
-        <div id="list-values-section" class="form-section" style="display: none;">
-            <h4>Valeurs de la liste</h4>
-            <div class="list-values-table-wrapper">
-                <table id="list-values-table">
-                    <thead>
-                        <tr>
-                            <th>Valeur</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><input type="text" placeholder="Ex: APD"></td>
-                            <td><input type="text" placeholder="Ex: Avant-Projet Détaillé"></td>
-                        </tr>
-                        <!-- D'autres lignes peuvent être ajoutées dynamiquement ici -->
-                    </tbody>
-                </table>
+            <!-- === Section 3: Valeurs de la liste (conditionnelle) === -->
+            <div id="list-values-section" class="form-section" style="display: none;">
+                <h4>Valeurs de la liste</h4>
+                <div class="list-values-table-wrapper">
+                    <table id="list-values-table">
+                        <thead><tr><th>Valeur</th><th>Description</th></tr></thead>
+                        <tbody><tr><td><input type="text"></td><td><input type="text"></td></tr></tbody>
+                    </table>
+                </div>
+                <button id="add-list-row-btn" class="button-small">Ajouter une ligne</button>
             </div>
-             <button id="add-list-row-btn" class="button-small">Ajouter une ligne</button>
+
+            <!-- === Actions === -->
+            <div class="modal-actions">
+                <button id="cancel-add-column-btn" class="button-secondary">Annuler</button>
+                <button id="confirm-add-column-btn" class="button-primary">Ajouter la colonne</button>
+            </div>
         </div>
-
-
-        <div class="modal-actions">
-            <button id="cancel-add-column-btn" class="button-secondary">Annuler</button>
-            <button id="confirm-add-column-btn" class="button-primary">Ajouter la colonne</button>
-        </div>
-    </div>
-  `;
-  // Logique pour la contrainte de longueur ===
-  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
-  const maxLengthCheckbox = modalOverlay.querySelector(
-    "#apply-max-length-checkbox",
-  );
-  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
-
-  // Générer les options pour le select
-  for (let i = 1; i <= 40; i++) {
-    const option = document.createElement("option");
-    option.value = i;
-    option.textContent = i;
-    maxLengthSelect.appendChild(option);
-  }
-
-  maxLengthCheckbox.addEventListener("change", () => {
-    maxLengthSelect.disabled = !maxLengthCheckbox.checked;
-  });
-
-  modalOverlay
-    .querySelectorAll('input[name="column-type"]')
-    .forEach((radio) => {
-      radio.addEventListener("change", (event) => {
-        const isTextType = event.target.value === "text";
-        maxLengthSection.style.display = isTextType ? "block" : "none";
-        if (!isTextType) {
-          maxLengthCheckbox.checked = false;
-          maxLengthSelect.disabled = true;
-        }
-      });
-    });
+    `;
   document.body.appendChild(modalOverlay);
 
-  // Logique pour fermer la modale
-  const closeModal = () => modalOverlay.remove();
+  // --- Logique de la modale ---
+  const typeSelect = modalOverlay.querySelector("#column-type-select");
+  const listSection = modalOverlay.querySelector("#list-values-section");
+  const constraintsSection = modalOverlay.querySelector("#constraints-section");
+  const lengthSection = modalOverlay.querySelector(
+    "#length-constraint-section",
+  );
+  const caseSection = modalOverlay.querySelector("#case-constraint-section");
+  const lengthTypeSelect = modalOverlay.querySelector(
+    "#length-constraint-type",
+  );
+  const lengthValue1 = modalOverlay.querySelector("#length-value1");
+  const lengthValue2 = modalOverlay.querySelector("#length-value2");
+  const rangeSeparator = modalOverlay.querySelector("#length-range-separator");
+
+  // Gère l'affichage des sections en fonction du type de données
+  const toggleSections = () => {
+    const type = typeSelect.value;
+    const showLength = ["text", "numeric", "alphabetic"].includes(type);
+    const showCase = type === "alphabetic";
+    const showList = type === "list";
+
+    constraintsSection.style.display =
+      showLength || showCase ? "block" : "none";
+    lengthSection.style.display = showLength ? "block" : "none";
+    caseSection.style.display = showCase ? "block" : "none";
+    listSection.style.display = showList ? "block" : "none";
+  };
+
+  // Gère l'affichage des champs de valeur de longueur
+  const toggleLengthInputs = () => {
+    const constraintType = lengthTypeSelect.value;
+    lengthValue1.style.display = ["exact", "min", "max", "range"].includes(
+      constraintType,
+    )
+      ? "inline-block"
+      : "none";
+    rangeSeparator.style.display =
+      constraintType === "range" ? "inline-block" : "none";
+    lengthValue2.style.display =
+      constraintType === "range" ? "inline-block" : "none";
+  };
+
+  typeSelect.addEventListener("change", toggleSections);
+  lengthTypeSelect.addEventListener("change", toggleLengthInputs);
+  toggleSections(); // Appel initial
+
+  // Logique pour la liste
   modalOverlay
-    .querySelector("#cancel-add-column-btn")
-    .addEventListener("click", closeModal);
+    .querySelector("#add-list-row-btn")
+    .addEventListener("click", () => {
+      const tableBody = modalOverlay.querySelector("#list-values-table tbody");
+      tableBody.insertRow().innerHTML = `<td><input type="text"></td><td><input type="text"></td>`;
+    });
+
+  // Logique de confirmation
   modalOverlay
     .querySelector("#confirm-add-column-btn")
     .addEventListener("click", () => {
-      // 1. Lire toutes les données du formulaire de la modale
       const name = modalOverlay.querySelector("#column-name").value.trim();
       if (!name) {
         alert("Veuillez donner un nom à la colonne.");
         return;
       }
 
-      const type = modalOverlay.querySelector(
-        'input[name="column-type"]:checked',
-      ).value;
+      const type = typeSelect.value;
       const isRequired =
         modalOverlay.querySelector('input[name="column-required"]:checked')
           .value === "yes";
 
-      let values = [];
-      let maxLength = null;
-      if (
-        modalOverlay.querySelector('input[name="column-type"]:checked')
-          .value === "text" &&
-        modalOverlay.querySelector("#apply-max-length-checkbox").checked
-      ) {
-        maxLength = parseInt(
-          modalOverlay.querySelector("#max-length-select").value,
-          10,
-        );
-      }
-      if (type === "list") {
-        const listRows = modalOverlay.querySelectorAll(
-          "#list-values-table tbody tr",
-        );
-        listRows.forEach((row) => {
-          const valueInput = row.cells[0].querySelector("input");
-          const descInput = row.cells[1].querySelector("input");
-          if (valueInput.value.trim()) {
-            values.push({
-              value: valueInput.value.trim(),
-              description: descInput.value.trim(),
-            });
-          }
-        });
-      }
-
-      // 2. Construire l'objet de la nouvelle colonne
-      const newColumn = {
-        name: name,
-        type: type,
-        required: isRequired,
-        values: values, // sera un tableau vide si le type n'est pas 'list'
-        maxLength: maxLength, // Ajout de la nouvelle propriété
+      // Lecture des contraintes
+      const lengthConstraint = {
+        type: lengthTypeSelect.value,
+        value1:
+          lengthTypeSelect.value !== "none"
+            ? parseInt(lengthValue1.value, 10) || null
+            : null,
+        value2:
+          lengthTypeSelect.value === "range"
+            ? parseInt(lengthValue2.value, 10) || null
+            : null,
       };
 
-      // 3. Appeler la fonction de callback avec les nouvelles données
+      const caseConstraint =
+        type === "alphabetic"
+          ? modalOverlay.querySelector("#case-constraint-select").value
+          : null;
+
+      // Lecture des valeurs de la liste
+      let values = [];
+      if (type === "list") {
+        modalOverlay
+          .querySelectorAll("#list-values-table tbody tr")
+          .forEach((row) => {
+            const valueInput = row.cells[0].querySelector("input");
+            const descInput = row.cells[1].querySelector("input");
+            if (valueInput.value.trim()) {
+              values.push({
+                value: valueInput.value.trim(),
+                description: descInput.value.trim(),
+              });
+            }
+          });
+      }
+
+      const newColumn = {
+        name,
+        type,
+        required: isRequired,
+        lengthConstraint,
+        case: caseConstraint,
+        values,
+      };
+
       onConfirmCallback(newColumn);
-
-      // 4. Fermer la modale
-      closeModal();
+      modalOverlay.remove();
     });
 
-  // Logique pour ajouter une ligne à la table des valeurs
-  const addListRowBtn = modalOverlay.querySelector("#add-list-row-btn");
-  const listTableBody = modalOverlay.querySelector("#list-values-table tbody");
-
-  addListRowBtn.addEventListener("click", () => {
-    const newRow = listTableBody.insertRow(); // Crée un <tr> à la fin du <tbody>
-    newRow.innerHTML = `
-        <td><input type="text" placeholder="Nouvelle valeur"></td>
-        <td><input type="text" placeholder="Description (optionnel)"></td>
-    `;
-  });
-
-  // Logique pour afficher/cacher la table de liste
   modalOverlay
-    .querySelectorAll('input[name="column-type"]')
-    .forEach((radio) => {
-      radio.addEventListener("change", (event) => {
-        const listSection = modalOverlay.querySelector("#list-values-section");
-        listSection.style.display =
-          event.target.value === "list" ? "block" : "none";
-      });
-    });
+    .querySelector("#cancel-add-column-btn")
+    .addEventListener("click", () => modalOverlay.remove());
 }
 
 function renderManageNamingRulesPage(container, rules) {
@@ -880,215 +911,6 @@ function renderNamingZone(container, convention) {
   `;
 }
 
-function renderEditColumnModal(columnData, onConfirmCallback) {
-  const modalOverlay = document.createElement("div");
-  modalOverlay.className = "modal-overlay";
-  modalOverlay.id = "edit-column-modal-overlay";
-
-  // --- HTML COMPLET DE LA MODALE ---
-  modalOverlay.innerHTML = `
-    <div class="modal-content">
-        <h2>Modifier la colonne</h2>
-
-        <div class="modal-form-grid">
-            <div class="form-group">
-                <label for="column-name">Nom de la colonne</label>
-                <input type="text" id="column-name" placeholder="Ex: Phase">
-            </div>
-<div id="max-length-section" class="form-section" style="display: none; margin-top: 15px;">
-    <label>
-        <input type="checkbox" id="apply-max-length-checkbox">
-        Appliquer un nombre de caractères maximum
-    </label>
-    <select id="max-length-select" disabled style="margin-top: 5px; width: auto;">
-        <!-- Les options de 1 à 40 seront générées par le JS -->
-    </select>
-</div>
-            <div class="form-group">
-                <label>Type de données</label>
-                <div class="checkbox-group">
-                    <label><input type="radio" name="column-type" value="text"> Texte libre</label>
-                    <label><input type="radio" name="column-type" value="list"> Liste</label>
-                    <label><input type="radio" name="column-type" value="number1"> 1 chiffre</label>
-                    <label><input type="radio" name="column-type" value="number2"> 2 chiffres</label>
-                    <label><input type="radio" name="column-type" value="number3"> 3 chiffres</label>
-                    <label><input type="radio" name="column-type" value="trigram"> Trigramme</label>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Obligatoire</label>
-                <div class="checkbox-group">
-                    <label><input type="radio" name="column-required" value="yes"> Oui</label>
-                    <label><input type="radio" name="column-required" value="no"> Non</label>
-                </div>
-            </div>
-        </div>
-
-        <div id="list-values-section" class="form-section" style="display: none;">
-            <h4>Valeurs de la liste</h4>
-            <div class="list-values-table-wrapper">
-                <table id="list-values-table">
-                    <thead><tr><th>Valeur</th><th>Description</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-             <button id="add-list-row-btn" class="button-secondary button-small">Ajouter une ligne</button>
-        </div>
-
-        <div class="modal-actions">
-            <button id="cancel-edit-column-btn" class="button-secondary">Annuler</button>
-            <button id="confirm-edit-column-btn" class="button-primary">Appliquer les modifications</button>
-        </div>
-    </div>
-  `;
-
-  // Logique pour la contrainte de longueur (avec pré-remplissage) ===
-  const maxLengthSection = modalOverlay.querySelector("#max-length-section");
-  const maxLengthCheckbox = modalOverlay.querySelector(
-    "#apply-max-length-checkbox",
-  );
-  const maxLengthSelect = modalOverlay.querySelector("#max-length-select");
-
-  for (let i = 1; i <= 40; i++) {
-    const option = document.createElement("option");
-    option.value = i;
-    option.textContent = i;
-    maxLengthSelect.appendChild(option);
-  }
-
-  if (columnData.type === "text") {
-    maxLengthSection.style.display = "block";
-    if (columnData.maxLength) {
-      maxLengthCheckbox.checked = true;
-      maxLengthSelect.disabled = false;
-      maxLengthSelect.value = columnData.maxLength;
-    }
-  }
-
-  maxLengthCheckbox.addEventListener("change", () => {
-    maxLengthSelect.disabled = !maxLengthCheckbox.checked;
-  });
-
-  modalOverlay
-    .querySelectorAll('input[name="column-type"]')
-    .forEach((radio) => {
-      radio.addEventListener("change", (event) => {
-        const isTextType = event.target.value === "text";
-        maxLengthSection.style.display = isTextType ? "block" : "none";
-        if (!isTextType) {
-          maxLengthCheckbox.checked = false;
-          maxLengthSelect.disabled = true;
-        }
-      });
-    });
-  document.body.appendChild(modalOverlay);
-
-  // --- PRÉ-REMPLISSAGE DES DONNÉES ---
-  modalOverlay.querySelector("#column-name").value = columnData.name;
-  const typeRadio = modalOverlay.querySelector(
-    `input[name="column-type"][value="${columnData.type}"]`,
-  );
-  if (typeRadio) typeRadio.checked = true;
-  const requiredRadio = modalOverlay.querySelector(
-    `input[name="column-required"][value="${columnData.required ? "yes" : "no"}"]`,
-  );
-  if (requiredRadio) requiredRadio.checked = true;
-
-  const listSection = modalOverlay.querySelector("#list-values-section");
-  if (columnData.type === "list") {
-    listSection.style.display = "block";
-    const listTableBody = modalOverlay.querySelector(
-      "#list-values-table tbody",
-    );
-    listTableBody.innerHTML = "";
-    if (columnData.values && columnData.values.length > 0) {
-      columnData.values.forEach((val) => {
-        const newRow = listTableBody.insertRow();
-        newRow.innerHTML = `
-            <td><input type="text" value="${val.value || ""}"></td>
-            <td><input type="text" value="${val.description || ""}"></td>
-        `;
-      });
-    }
-  }
-
-  // --- LOGIQUE DES ÉVÉNEMENTS ---
-  const closeModal = () => modalOverlay.remove();
-  modalOverlay
-    .querySelector("#cancel-edit-column-btn")
-    .addEventListener("click", closeModal);
-
-  modalOverlay
-    .querySelector("#add-list-row-btn")
-    .addEventListener("click", () => {
-      const listTableBody = modalOverlay.querySelector(
-        "#list-values-table tbody",
-      );
-      const newRow = listTableBody.insertRow();
-      newRow.innerHTML = `<td><input type="text"></td><td><input type="text"></td>`;
-    });
-
-  modalOverlay
-    .querySelectorAll('input[name="column-type"]')
-    .forEach((radio) => {
-      radio.addEventListener("change", (event) => {
-        listSection.style.display =
-          event.target.value === "list" ? "block" : "none";
-      });
-    });
-
-  modalOverlay
-    .querySelector("#confirm-edit-column-btn")
-    .addEventListener("click", () => {
-      const name = modalOverlay.querySelector("#column-name").value.trim();
-      if (!name) {
-        alert("Veuillez donner un nom à la colonne.");
-        return;
-      }
-      const type = modalOverlay.querySelector(
-        'input[name="column-type"]:checked',
-      ).value;
-      const isRequired =
-        modalOverlay.querySelector('input[name="column-required"]:checked')
-          .value === "yes";
-      let values = [];
-      let maxLength = null;
-      if (
-        modalOverlay.querySelector('input[name="column-type"]:checked')
-          .value === "text" &&
-        modalOverlay.querySelector("#apply-max-length-checkbox").checked
-      ) {
-        maxLength = parseInt(
-          modalOverlay.querySelector("#max-length-select").value,
-          10,
-        );
-      }
-      if (type === "list") {
-        modalOverlay
-          .querySelectorAll("#list-values-table tbody tr")
-          .forEach((row) => {
-            const valueInput = row.cells[0].querySelector("input");
-            const descInput = row.cells[1].querySelector("input");
-            if (valueInput.value.trim()) {
-              values.push({
-                value: valueInput.value.trim(),
-                description: descInput.value.trim(),
-              });
-            }
-          });
-      }
-      const updatedColumn = {
-        name,
-        type,
-        required: isRequired,
-        values,
-        maxLength: maxLength,
-      };
-      onConfirmCallback(updatedColumn);
-      closeModal();
-    });
-}
 // Exporter toutes les fonctions
 export {
   renderLoading,
@@ -1107,5 +929,4 @@ export {
   renderControlPage,
   renderHelpCodificationPage,
   renderNamingZone,
-  renderEditColumnModal,
 };
