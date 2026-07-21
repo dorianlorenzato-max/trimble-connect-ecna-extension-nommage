@@ -1662,17 +1662,27 @@ import {
   // === DÉBUT DE L'AJOUT : Analyseur de nom de fichier intelligent ===
   function smartParseFileName(filename, convention) {
     // 1. Découper le nom de fichier par tous les séparateurs possibles
+    console.log(`\n\n--- smartParse pour : "${filename}" ---`);
     const parts = filename.split(/[-._]/);
     const columns = convention.columns;
     const result = [];
     let partIndex = 0; // Notre curseur pour les parties du nom
-
+    console.log("Parties initiales:", parts);
+    console.log(
+      "Colonnes de la convention:",
+      columns.map((c) => ({ name: c.name, required: c.required })),
+    );
     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
       const column = columns[colIndex];
-
+      // --- LOG DE BOUCLE ---
+      console.log(
+        `\n[Étape ${colIndex}] Colonne: "${column.name}" (Requis: ${column.required}) | Curseur de partie: ${partIndex}`,
+      );
       // S'il n'y a plus de parties dans le nom, on remplit le reste avec du vide
       if (partIndex >= parts.length) {
         result.push("");
+        // --- LOG DE DÉCISION ---
+        console.log('-> Décision: Plus de parties disponibles. Ajout de ""');
         continue;
       }
 
@@ -1685,23 +1695,35 @@ import {
         .slice(colIndex + 1)
         .filter((c) => c.required).length;
       const remainingParts = parts.length - partIndex;
+      // --- LOGS D'ANALYSE ---
+      console.log(`  - Partie actuelle à tester: "${currentPart}"`);
+      console.log(`  - Correspondance avec la colonne ? ${isMatch}`);
+      console.log(`  - Parties restantes: ${remainingParts}`);
+      console.log(
+        `  - Colonnes obligatoires restantes: ${remainingMandatoryCols}`,
+      );
 
       // On ignore la colonne optionnelle si :
       // a) la partie actuelle ne correspond pas, OU
       // b) la partie correspond, mais le nombre de parties restantes est exactement égal au nombre de colonnes obligatoires restantes (ce qui signifie que cette partie EST pour une future colonne obligatoire)
       const mustSkipOptional =
         !column.required &&
-        (!isMatch ||
-          (isMatch && remainingParts === remainingMandatoryCols + 1));
-
+        (!isMatch || (isMatch && remainingParts === remainingMandatoryCols));
+      // --- LOG DE DÉCISION ---
+      console.log(
+        `-> Décision: Ignorer cette colonne optionnelle ? ${mustSkipOptional}`,
+      );
       if (mustSkipOptional) {
         result.push(""); // On ignore la colonne
+        console.log(`   Action: IGNORER. Résultat partiel:`, [...result]);
         // On ne déplace PAS le curseur partIndex, pour retester la même partie avec la colonne suivante
       } else {
         result.push(currentPart); // On attribue la partie
         partIndex++; // On déplace le curseur pour passer à la partie suivante
+        console.log(`   Action: ASSIGNER. Résultat partiel:`, [...result]);
       }
     }
+    console.log("--- Résultat final de l'analyse:", result, "---");
     return result;
   }
   // === FIN DE L'AJOUT ===
