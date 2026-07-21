@@ -559,15 +559,9 @@ import {
   }
 
   function updateNamingPreviewAndValidate() {
-    // 1. Récupérer la convention depuis l'état global de la page
     const { convention, file } = helpCodificationState;
+    if (!convention || !file) return;
 
-    // Sécurité : si la convention n'est pas chargée, on ne fait rien
-    if (!convention || !file) {
-      return;
-    }
-
-    const previewSpan = document.getElementById("final-name-preview");
     const uploadBtn = document.getElementById("upload-document-btn");
     let finalNameParts = [];
     let isFormValid = true;
@@ -576,49 +570,40 @@ import {
       const input = document.querySelector(
         `.naming-input[data-index="${index}"]`,
       );
-
-      // Pas besoin de vérifier si l'input existe, car cette fonction est appelée après le rendu
-
       let value = input.value;
 
-      // La casse est maintenant gérée par validatePart, mais on garde la logique au cas où
-      if (colRule.case === "upper") {
-        value = value.toUpperCase();
-      }
+      // 1. On ne convertit PLUS la casse automatiquement ici. La validation pure se fait dans validatePart.
 
       const validationResult = validatePart(value, colRule);
 
-      // === Début de la modification ===
       if (validationResult.isValid) {
-        // Si c'est valide, on retire l'infobulle et la classe d'erreur
         input.classList.remove("invalid-input");
         input.removeAttribute("title");
       } else {
-        // Si c'est invalide, on ajoute la classe d'erreur et on met à jour l'infobulle avec le message d'erreur
         input.classList.add("invalid-input");
         input.setAttribute("title", validationResult.reason);
         isFormValid = false;
       }
-      // === Fin de la modification ===
 
       finalNameParts.push(value);
     });
 
-    // 2. Utiliser le séparateur de la convention, avec '-' comme valeur par défaut
-    const separator = convention.separator || "-";
+    // 2. On réintroduit l'appel à buildFinalName pour construire le nom avec les bons séparateurs.
     const finalName = buildFinalName(convention.columns, finalNameParts);
 
-    const finalNameCharCount = finalName.length;
+    // --- Mise à jour de l'aperçu et de l'état ---
+    const previewSpan = document.getElementById("final-name-preview");
     const charCountSpan = document.getElementById("final-name-char-count");
+
     if (charCountSpan) {
-      charCountSpan.textContent = finalNameCharCount;
+      charCountSpan.textContent = finalName.length;
     }
 
     const fileExtension = file.name.split(".").pop();
     const finalNameWithExt = `${finalName}.${fileExtension}`;
 
     previewSpan.textContent = finalNameWithExt;
-    helpCodificationState.finalName = finalNameWithExt; // Le nom final est maintenant correct
+    helpCodificationState.finalName = finalNameWithExt;
     uploadBtn.disabled = !isFormValid;
   }
 
