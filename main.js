@@ -576,11 +576,31 @@ import {
       const input = document.querySelector(
         `.naming-input[data-index="${index}"]`,
       );
+
+      // Pas besoin de vérifier si l'input existe, car cette fonction est appelée après le rendu
+
       let value = input.value;
-      if (colRule.type === "trigram") value = value.toUpperCase();
+
+      // La casse est maintenant gérée par validatePart, mais on garde la logique au cas où
+      if (colRule.case === "upper") {
+        value = value.toUpperCase();
+      }
+
       const validationResult = validatePart(value, colRule);
-      input.classList.toggle("invalid-input", !validationResult.isValid);
-      if (!validationResult.isValid) isFormValid = false;
+
+      // === Début de la modification ===
+      if (validationResult.isValid) {
+        // Si c'est valide, on retire l'infobulle et la classe d'erreur
+        input.classList.remove("invalid-input");
+        input.removeAttribute("title");
+      } else {
+        // Si c'est invalide, on ajoute la classe d'erreur et on met à jour l'infobulle avec le message d'erreur
+        input.classList.add("invalid-input");
+        input.setAttribute("title", validationResult.reason);
+        isFormValid = false;
+      }
+      // === Fin de la modification ===
+
       finalNameParts.push(value);
     });
 
