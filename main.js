@@ -237,6 +237,13 @@ import {
         rootFolders.map((f) => f.name),
       );
       const treeRootElement = document.getElementById("folder-tree-root");
+      if (!treeRootElement) {
+        console.log(
+          "Navigation détectée pendant le chargement. Abandon de l'affichage.",
+        );
+        return;
+      }
+
       treeRootElement.innerHTML = "";
       const filteredRootFolders = rootFolders.filter((f) =>
         necessaryFoldersData.necessaryFolderIds.has(f.id),
