@@ -1681,145 +1681,109 @@ import {
   }
   // === DÉBUT DE L'AJOUT : Analyseur de nom de fichier intelligent ===
   function smartParseFileName(filename, convention) {
-    const finalParts = [];
     const columns = convention.columns;
     let remainingFileString = filename.replace(/\.[^/.]+$/, ""); // Enlève l'extension
+    const finalParts = [];
 
     // ---------------------------------------------------------------------------------
-    // Étape 1: Regrouper les colonnes de la convention par "blocs"
-    // Un "bloc" est une suite de colonnes liées par des séparateurs invisibles.
-    // Les séparateurs VISIBLES agissent comme des frontières entre les blocs.
+    // Étape 1: Groupement des colonnes par blocs (inchangé)
     // ---------------------------------------------------------------------------------
     const columnGroups = [];
     let currentGroup = [];
     for (const column of columns) {
-      currentGroup.push(column);
-      if (column.separator && column.separator !== "\u200B") {
-        // Si un séparateur VISIBLE est trouvé
-        columnGroups.push({
-          columns: currentGroup,
-          separator: column.separator,
-        });
-        currentGroup = []; // On commence un nouveau groupe
-      }
+        currentGroup.push(column);
+        // Le séparateur VRAIMENT visible est celui qui n'est pas un ZWSP
+        if (column.separator && column.separator !== "\u200B") {
+            columnGroups.push({ columns: currentGroup, separator: column.separator });
+            currentGroup = [];
+        }
     }
     if (currentGroup.length > 0) {
-      columnGroups.push({
-        columns: currentGroup,
-        separator: null,
-      }); // Ajoute le dernier groupe
+        columnGroups.push({ columns: currentGroup, separator: null });
     }
 
     // ---------------------------------------------------------------------------------
-    // Étape 2: Découpage primaire du nom de fichier en "macro-blocs" (Version Corrigée)
-    // On utilise les séparateurs VISIBLES de la convention comme guides.
-    // ---------------------------------------------------------------------------------
-    const fileBlocks = [];
-    let remainingStringForSplitting = remainingFileString;
-
-    for (const group of columnGroups) {
-      // On cherche le séparateur qui TERMINE ce groupe.
-      const separator = group.separator;
-
-      // Si un séparateur visible est défini pour cette frontière...
-      if (separator && separator !== "\u200B") {
-        const separatorIndex = remainingStringForSplitting.indexOf(separator);
-
-        if (separatorIndex !== -1) {
-          // On a trouvé la frontière. Le bloc est tout ce qui précède.
-          fileBlocks.push(
-            remainingStringForSplitting.substring(0, separatorIndex),
-          );
-          // La nouvelle chaîne à analyser est ce qui se trouve APRÈS la frontière.
-          remainingStringForSplitting = remainingStringForSplitting.substring(
-            separatorIndex + separator.length,
-          );
-        } else {
-          // Si la frontière attendue n'est pas trouvée, on considère que ce bloc prend tout
-          // et qu'il n'y a plus rien pour les groupes suivants.
-          fileBlocks.push(remainingStringForSplitting);
-          remainingStringForSplitting = "";
-        }
-      } else {
-        // Si pas de séparateur visible (c'est le dernier groupe, ou tout est invisible)
-        // Ce groupe prend tout ce qui reste.
-        fileBlocks.push(remainingStringForSplitting);
-        remainingStringForSplitting = "";
-      }
-    }
-
-    // Contrôle de cohérence, inchangé
-    if (fileBlocks.length < columnGroups.length) {
-      while (fileBlocks.length < columnGroups.length) {
-        fileBlocks.push("");
-      }
-    }
-
-    // ---------------------------------------------------------------------------------
-    // Étape 3 & 4: Analyse détaillée de chaque bloc
+    // Étape 2: Découpage Séquentiel Strict par Frontière Attendue
     // ---------------------------------------------------------------------------------
     for (let i = 0; i < columnGroups.length; i++) {
-      const group = columnGroups[i];
-      let remainingBlockString = fileBlocks[i];
-      const columnsInGroup = group.columns;
+        const group = columnGroups[i];
+        const columnsInGroup = group.columns;
+        let blockToParse = "";
 
-      // Itération sur les colonnes à l'intérieur du bloc (pour les blocs complexes)
-      for (let j = 0; j < columnsInGroup.length; j++) {
-        const columnRule = columnsInGroup[j];
-        let foundSegment = null;
-
-        // S'il n'y a plus rien à analyser dans le bloc, on continue.
-        if (remainingBlockString.length === 0) {
-          finalParts.push("");
-          continue;
-        }
-
-        // -- Moteur de Décision Interne --
-        // Priorité 1: Contrainte de longueur EXACTE
-        if (columnRule.lengthConstraint?.type === "exact") {
-          const len = columnRule.lengthConstraint.value1;
-          foundSegment = remainingBlockString.substring(0, len);
-
-          // Priorité 2: Recherche par Liste (le plus long préfixe)
-        } else if (columnRule.type === "list") {
-          const matches = columnRule.values
-            .map((v) => v.value)
-            .filter((v) => remainingBlockString.startsWith(v));
-
-          if (matches.length > 0) {
-            // On choisit la correspondance la plus longue pour éviter les ambiguïtés
-            foundSegment = matches.sort((a, b) => b.length - a.length)[0];
-          }
-        }
-
-        // Cas par défaut ou dernière colonne du groupe
-        if (foundSegment === null) {
-          if (j === columnsInGroup.length - 1) {
-            // Si c'est la dernière colonne du groupe, elle prend tout ce qui reste du bloc.
-            foundSegment = remainingBlockString;
-          } else {
-            // Si on est ici, c'est un champ texte libre sans contrainte forte au milieu d'un bloc.
-            // C'est un cas ambigu. Pour l'instant, on considère qu'il échoue à trouver un segment.
-            foundSegment = "";
-          }
-        }
-
-        // Gestion des colonnes optionnelles
-        const isSegmentValid = validatePart(foundSegment, columnRule).isValid;
-        if (!isSegmentValid && !columnRule.required) {
-          finalParts.push(""); // La colonne est optionnelle et ne correspond pas, on la saute.
-          // IMPORTANT: On ne consomme PAS la chaîne (remainingBlockString reste inchangée)
+        const endingSeparator = group.separator;
+        if (endingSeparator) {
+            const separatorIndex = remainingFileString.indexOf(endingSeparator);
+            if (separatorIndex !== -1) {
+                blockToParse = remainingFileString.substring(0, separatorIndex);
+                remainingFileString = remainingFileString.substring(separatorIndex + endingSeparator.length);
+            } else {
+                blockToParse = remainingFileString;
+                remainingFileString = "";
+            }
         } else {
-          finalParts.push(foundSegment);
-          remainingBlockString = remainingBlockString.substring(
-            foundSegment.length,
-          );
+            blockToParse = remainingFileString;
+            remainingFileString = "";
         }
-      }
-    }
 
+        // ---------------------------------------------------------------------------------
+        // Étape 3: Analyse Interne des Blocs (plus robuste)
+        // ---------------------------------------------------------------------------------
+        for (let j = 0; j < columnsInGroup.length; j++) {
+            const columnRule = columnsInGroup[j];
+            let segment = "";
+
+            if (blockToParse.length === 0) {
+                finalParts.push("");
+                continue;
+            }
+
+            // Si c'est la dernière colonne du groupe, elle prend tout ce qui reste du bloc.
+            if (j === columnsInGroup.length - 1) {
+                segment = blockToParse;
+            } 
+            // Logique de découpe à l'intérieur d'un bloc (séparateurs invisibles)
+            else {
+                let bestMatchLength = 0;
+                // Priorité 1: Longueur exacte
+                if (columnRule.lengthConstraint?.type === 'exact') {
+                    bestMatchLength = columnRule.lengthConstraint.value1;
+                }
+                // Priorité 2: Liste de valeurs
+                else if (columnRule.type === 'list') {
+                    const matches = columnRule.values
+                        .map(v => v.value)
+                        .filter(v => blockToParse.startsWith(v))
+                        .sort((a, b) => b.length - a.length);
+                    if (matches.length > 0) {
+                        bestMatchLength = matches[0].length;
+                    }
+                }
+                
+                if (bestMatchLength > 0) {
+                     segment = blockToParse.substring(0, bestMatchLength);
+                } else {
+                    // Cas ambigu: colonne texte libre au milieu d'un bloc. On la considère vide.
+                    segment = "";
+                }
+            }
+            
+            // Validation et gestion des optionnels
+            const isSegmentValid = validatePart(segment, columnRule).isValid;
+            if (isSegmentValid) {
+                 finalParts.push(segment);
+                 blockToParse = blockToParse.substring(segment.length);
+            } else {
+                if (!columnRule.required) {
+                    finalParts.push(""); // Colonne optionnelle qui ne correspond pas, on la saute
+                } else {
+                    finalParts.push(segment); // Colonne obligatoire, on pousse le segment invalide pour l'affichage de l'erreur
+                    blockToParse = blockToParse.substring(segment.length);
+                }
+            }
+        }
+    }
     return finalParts;
-  }
+}
   // === FIN DE L'AJOUT ===
   const rerenderPage = () => {
     currentRuleState.name = document.getElementById("naming-rule-name").value;
