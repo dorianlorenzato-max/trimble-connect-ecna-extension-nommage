@@ -1712,39 +1712,48 @@ import {
 
     // ---------------------------------------------------------------------------------
     // Étape 2: Découpage primaire du nom de fichier en "macro-blocs" (Version Corrigée)
-  // On utilise les séparateurs VISIBLES de la convention comme guides.
-  // ---------------------------------------------------------------------------------
-  const fileBlocks = [];
-  let stringToSplit = remainingFileString;
+    // On utilise les séparateurs VISIBLES de la convention comme guides.
+    // ---------------------------------------------------------------------------------
+    const fileBlocks = [];
+    let remainingStringForSplitting = remainingFileString;
 
-  // On construit une expression régulière à partir des séparateurs visibles de la convention
-  const separators = columnGroups
-      .map(g => g.separator)
-      .filter(s => s && s !== "\u200B") // On ne garde que les séparateurs visibles
-      .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); // Échapper les caractères spéciaux pour la regex
+    for (const group of columnGroups) {
+      // On cherche le séparateur qui TERMINE ce groupe.
+      const separator = group.separator;
 
-  if (separators.length > 0) {
-      const regex = new RegExp(`(${separators.join('|')})`);
-      const parts = stringToSplit.split(regex);
-      
-      // La fonction split avec un groupe capturant inclut les délimiteurs dans le résultat.
-      // Ex: "A.B" split par (.) -> ["A", ".", "B"]
-      // Nous devons regrouper intelligemment.
-      for (let i = 0; i < parts.length; i = i + 2) {
-          fileBlocks.push(parts[i]);
+      // Si un séparateur visible est défini pour cette frontière...
+      if (separator && separator !== "\u200B") {
+        const separatorIndex = remainingStringForSplitting.indexOf(separator);
+
+        if (separatorIndex !== -1) {
+          // On a trouvé la frontière. Le bloc est tout ce qui précède.
+          fileBlocks.push(
+            remainingStringForSplitting.substring(0, separatorIndex),
+          );
+          // La nouvelle chaîne à analyser est ce qui se trouve APRÈS la frontière.
+          remainingStringForSplitting = remainingStringForSplitting.substring(
+            separatorIndex + separator.length,
+          );
+        } else {
+          // Si la frontière attendue n'est pas trouvée, on considère que ce bloc prend tout
+          // et qu'il n'y a plus rien pour les groupes suivants.
+          fileBlocks.push(remainingStringForSplitting);
+          remainingStringForSplitting = "";
+        }
+      } else {
+        // Si pas de séparateur visible (c'est le dernier groupe, ou tout est invisible)
+        // Ce groupe prend tout ce qui reste.
+        fileBlocks.push(remainingStringForSplitting);
+        remainingStringForSplitting = "";
       }
-  } else {
-      // S'il n'y a aucun séparateur visible dans toute la convention
-      fileBlocks.push(stringToSplit);
-  }
+    }
 
-  if (fileBlocks.length < columnGroups.length) {
-      // Si le découpage a produit moins de blocs que de groupes (ex: un séparateur manque),
-      // on remplit le reste avec des chaînes vides pour que la validation échoue correctement.
-      while(fileBlocks.length < columnGroups.length) {
-          fileBlocks.push("");
+    // Contrôle de cohérence, inchangé
+    if (fileBlocks.length < columnGroups.length) {
+      while (fileBlocks.length < columnGroups.length) {
+        fileBlocks.push("");
       }
-  }
+    }
 
     // ---------------------------------------------------------------------------------
     // Étape 3 & 4: Analyse détaillée de chaque bloc
