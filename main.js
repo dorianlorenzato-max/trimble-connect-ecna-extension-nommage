@@ -1711,36 +1711,40 @@ import {
     }
 
     // ---------------------------------------------------------------------------------
-    // Étape 2: Découpage primaire du nom de fichier en "macro-blocs"
-    // On utilise les séparateurs VISIBLES de la convention comme guides.
-    // ---------------------------------------------------------------------------------
-    const fileBlocks = [];
-    for (let i = 0; i < columnGroups.length; i++) {
-      const group = columnGroups[i];
-      if (group.separator) {
-        const separatorIndex = remainingFileString.indexOf(group.separator);
-        if (separatorIndex !== -1) {
-          fileBlocks.push(remainingFileString.substring(0, separatorIndex));
-          remainingFileString = remainingFileString.substring(
-            separatorIndex + group.separator.length,
-          );
-        } else {
-          // Si un séparateur attendu n'est pas trouvé, le nom est invalide.
-          // On pousse le reste et on laisse la validation échouer plus tard.
-          fileBlocks.push(remainingFileString);
-          remainingFileString = "";
-        }
-      } else {
-        // Pour le dernier groupe, il prend tout le reste.
-        fileBlocks.push(remainingFileString);
-      }
-    }
+    // Étape 2: Découpage primaire du nom de fichier en "macro-blocs" (Version Corrigée)
+  // On utilise les séparateurs VISIBLES de la convention comme guides.
+  // ---------------------------------------------------------------------------------
+  const fileBlocks = [];
+  let stringToSplit = remainingFileString;
 
-    if (fileBlocks.length !== columnGroups.length) {
-      // Si le nombre de blocs ne correspond pas, impossible de continuer.
-      // On retourne un tableau vide de la bonne taille pour que l'interface affiche des erreurs partout.
-      return Array(columns.length).fill("");
-    }
+  // On construit une expression régulière à partir des séparateurs visibles de la convention
+  const separators = columnGroups
+      .map(g => g.separator)
+      .filter(s => s && s !== "\u200B") // On ne garde que les séparateurs visibles
+      .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); // Échapper les caractères spéciaux pour la regex
+
+  if (separators.length > 0) {
+      const regex = new RegExp(`(${separators.join('|')})`);
+      const parts = stringToSplit.split(regex);
+      
+      // La fonction split avec un groupe capturant inclut les délimiteurs dans le résultat.
+      // Ex: "A.B" split par (.) -> ["A", ".", "B"]
+      // Nous devons regrouper intelligemment.
+      for (let i = 0; i < parts.length; i = i + 2) {
+          fileBlocks.push(parts[i]);
+      }
+  } else {
+      // S'il n'y a aucun séparateur visible dans toute la convention
+      fileBlocks.push(stringToSplit);
+  }
+
+  if (fileBlocks.length < columnGroups.length) {
+      // Si le découpage a produit moins de blocs que de groupes (ex: un séparateur manque),
+      // on remplit le reste avec des chaînes vides pour que la validation échoue correctement.
+      while(fileBlocks.length < columnGroups.length) {
+          fileBlocks.push("");
+      }
+  }
 
     // ---------------------------------------------------------------------------------
     // Étape 3 & 4: Analyse détaillée de chaque bloc
