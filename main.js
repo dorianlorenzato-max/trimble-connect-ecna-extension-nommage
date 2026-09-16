@@ -238,12 +238,9 @@ import {
       );
       const treeRootElement = document.getElementById("folder-tree-root");
       if (!treeRootElement) {
-        console.log(
-          "Navigation détectée pendant le chargement. Abandon de l'affichage.",
-        );
-        return;
+        console.log("Navigation détectée pendant le chargement. Abandon de l'affichage.");
+        return; // On arrête la fonction ici, le cache est déjà sauvegardé.
       }
-
       treeRootElement.innerHTML = "";
       const filteredRootFolders = rootFolders.filter((f) =>
         necessaryFoldersData.necessaryFolderIds.has(f.id),
@@ -633,7 +630,7 @@ import {
       }
       finalFileNameToUpload = finalName;
     }
-    const cleanFileNameForUpload = finalFileNameToUpload.replace(/\u200B/g, "");
+
     renderSaving(mainContentDiv);
 
     try {
@@ -642,7 +639,7 @@ import {
         globalAccessToken,
         selectedFolderId,
         file,
-        cleanFileNameForUpload,
+        finalFileNameToUpload,
         file.type,
       );
 
@@ -951,7 +948,6 @@ import {
         const parts = smartParseFileName(nameForParsing, conventionRules);
         const row = [doc.depositor];
         parts.forEach((partValue, index) => {
-          const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
           const validationResult = validatePart(partValue, colRule);
           if (validationResult.isValid) {
@@ -1001,7 +997,6 @@ import {
         const parts = smartParseFileName(nameForParsing, conventionRules);
         const row = [doc.depositor];
         parts.forEach((partValue, index) => {
-          const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
           const validationResult = validatePart(partValue, colRule);
           if (validationResult.isValid) {
@@ -1663,17 +1658,11 @@ import {
     for (let i = 0; i < effectiveParts.length; i++) {
       finalName += effectiveParts[i].value;
 
-      // S'il y a une partie suivante, on ajoute le séparateur
+      // S'il y a une partie suivante, on ajoute le séparateur de la partie actuelle
       if (i < effectiveParts.length - 1) {
         const originalRule = columns[effectiveParts[i].originalIndex];
-        if (originalRule) {
-          if (originalRule.separator) {
-            // S'il y a un séparateur visible, on l'ajoute
-            finalName += originalRule.separator;
-          } else {
-            // Sinon, on injecte notre séparateur invisible
-            finalName += "\u200B";
-          }
+        if (originalRule && originalRule.separator) {
+          finalName += originalRule.separator;
         }
       }
     }
@@ -1683,7 +1672,7 @@ import {
   function smartParseFileName(filename, convention) {
     // 1. Découper le nom de fichier par tous les séparateurs possibles
 
-    const parts = filename.split(/[-._\u200B]/);
+    const parts = filename.split(/[-._]/);
     const columns = convention.columns;
     const result = [];
     let partIndex = 0; // Notre curseur pour les parties du nom
