@@ -1756,7 +1756,11 @@ import {
         }
 
         // Validation et gestion des optionnels
-        const isSegmentValid = validatePart(segment, columnRule).isValid;
+        const isSegmentValid = validatePart(
+          segment,
+          columnRule,
+          convention,
+        ).isValid;
         if (isSegmentValid) {
           finalParts.push(segment);
           blockToParse = blockToParse.substring(segment.length);
