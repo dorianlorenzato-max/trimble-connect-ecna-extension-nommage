@@ -825,6 +825,9 @@ import {
   // ----------------------------------
   function validatePart(value, rule, convention) {
     // <-- 1. La convention est maintenant un paramètre
+    // --- SONDE DE DÉBOGAGE ---
+    console.log(`[validatePart] Validation de : "${value}"`, { rule: rule });
+
     value = value || ""; // S'assurer que la valeur n'est pas null/undefined
 
     // --- 2. Identifier les séparateurs interdits ---
@@ -834,10 +837,20 @@ import {
       .filter((sep) => sep && sep !== "\u200B"); // Exclut les séparateurs nuls ou invisibles
 
     // --- 3. Vérifier la présence de ces séparateurs dans la valeur ---
+    // --- SONDE DE DÉBOGAGE ---
+    console.log(
+      `[validatePart] Séparateurs visibles interdits :`,
+      activeVisibleSeparators,
+    );
+
     for (const separator of activeVisibleSeparators) {
       if (value.includes(separator)) {
         // Permet au champ d'être égal au séparateur (cas rare mais possible)
         if (value !== separator) {
+          // --- SONDE DE DÉBOGAGE ---
+          console.error(
+            `[validatePart] ERREUR : La valeur "${value}" contient le séparateur interdit "${separator}".`,
+          );
           return {
             isValid: false,
             reason: `Le caractère "${separator}" est utilisé comme séparateur et ne peut pas être dans ce champ.`,
@@ -1709,9 +1722,12 @@ import {
   }
   // === DÉBUT DE L'AJOUT : Analyseur de nom de fichier intelligent ===
   function smartParseFileName(filename, convention) {
+    console.log(`\n\n--- DÉBUT smartParseFileName pour "${filename}" ---`);
     const columns = convention.columns;
     let remainingFileString = filename.replace(/\.[^/.]+$/, ""); // Enlève l'extension
     const finalParts = [];
+    console.log(`[Parse] Chaîne à analyser : "${remainingFileString}"`);
+    console.log("[Parse] Convention utilisée :", convention);
 
     if (!columns || columns.length === 0) {
       return [];
@@ -1735,7 +1751,10 @@ import {
     if (currentGroup.length > 0) {
       columnGroups.push({ columns: currentGroup, separator: null });
     }
-
+    console.log(
+      "[Parse] Étape 1 : Groupes de colonnes identifiés :",
+      JSON.parse(JSON.stringify(columnGroups)),
+    );
     // --- Étape 3 & 4 : Traiter la chaîne bloc par bloc ---
     for (let i = 0; i < columnGroups.length; i++) {
       const group = columnGroups[i];
@@ -1743,6 +1762,12 @@ import {
 
       const endingSeparator = group.separator;
       // Si ce bloc est censé se terminer par un séparateur visible...
+      console.log(
+        `\n[Parse] Étape 2 : Traitement du Groupe ${i + 1} (terminé par "${endingSeparator || "rien"}")`,
+      );
+      console.log(
+        `[Parse]   Chaîne restante avant traitement : "${remainingFileString}"`,
+      );
       if (endingSeparator) {
         const separatorIndex = remainingFileString.indexOf(endingSeparator);
         // Si on trouve ce séparateur
@@ -1762,13 +1787,22 @@ import {
         blockToParse = remainingFileString;
         remainingFileString = "";
       }
-
+      console.log(
+        `[Parse]   Bloc à analyser pour ce groupe : "${blockToParse}"`,
+      );
       // --- Étape 5, 6 & 7 : Analyser à l'intérieur du bloc (logique des séparateurs invisibles) ---
       let remainingBlockString = blockToParse;
       for (const columnRule of group.columns) {
+        console.log(
+          `\n[Parse]   Étape 3 : Analyse de la colonne "${columnRule.name}" dans le bloc.`,
+        );
+        console.log(
+          `[Parse]     Chaîne restante du bloc : "${remainingBlockString}"`,
+        );
         // Si le bloc est vide, tous les champs restants sont vides.
         if (remainingBlockString.length === 0) {
           finalParts.push("");
+          console.log(`[Parse]     -> Segment extrait : "" (bloc vide)`);
           continue;
         }
 
@@ -1780,10 +1814,16 @@ import {
           group.columns.indexOf(columnRule) === group.columns.length - 1;
         if (isLastInGroup) {
           consumedLength = remainingBlockString.length;
+          console.log(
+            `[Parse]     Stratégie : "Dernier du groupe", longueur = ${consumedLength}`,
+          );
         }
         // Priorité 2: Contrainte de longueur exacte.
         else if (columnRule.lengthConstraint?.type === "exact") {
           consumedLength = columnRule.lengthConstraint.value1;
+          console.log(
+            `[Parse]     Stratégie : "Longueur exacte", longueur = ${consumedLength}`,
+          );
         }
         // Priorité 3: Valeur issue d'une liste. On cherche la correspondance la plus longue.
         else if (columnRule.type === "list") {
@@ -1794,7 +1834,18 @@ import {
 
           if (matches.length > 0) {
             consumedLength = matches[0].length;
+            console.log(
+              `[Parse]     Stratégie : "Liste", plus long match trouvé = "${matches[0]}" (longueur = ${consumedLength})`,
+            );
+          } else {
+            console.log(
+              `[Parse]     Stratégie : "Liste", mais aucun match trouvé.`,
+            );
           }
+        } else {
+          console.log(
+            `[Parse]     Stratégie : "Cas ambigu" (Texte libre non final), longueur = 0`,
+          );
         }
 
         // Si on a pu déterminer une longueur, on extrait le segment.
@@ -1809,7 +1860,7 @@ import {
           // On le considère vide pour ne pas perturber la suite. L'erreur sera levée par la validation si le champ est obligatoire.
           segment = "";
         }
-
+        console.log(`[Parse]     -> Segment extrait : "${segment}"`);
         finalParts.push(segment);
       }
     }
@@ -1819,7 +1870,10 @@ import {
       finalParts.push("");
     }
 
-    return finalParts.slice(0, columns.length); // Garantit de ne jamais retourner plus de parties que de colonnes.
+    const finalResult = finalParts.slice(0, columns.length); // Garantit de ne jamais retourner plus de parties que de colonnes.
+    console.log(`\n--- FIN smartParseFileName ---`);
+    console.log(`[Parse] Résultat final : `, finalResult);
+    return finalResult;
   }
   // === FIN DE L'AJOUT ===
   const rerenderPage = () => {
