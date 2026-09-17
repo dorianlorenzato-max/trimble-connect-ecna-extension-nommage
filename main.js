@@ -23,7 +23,6 @@ import {
   renderSuccess,
   renderConfigPage,
   renderNamingConfigSummaryTable,
-  renderHomePageWithButtons,
   renderCreateNamingRulePage,
   renderAddColumnModal,
   renderManageNamingRulesPage,
@@ -974,7 +973,11 @@ import {
         parts.forEach((partValue, index) => {
           const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule, convention);
+          const validationResult = validatePart(
+            partValue,
+            colRule,
+            conventionRules,
+          );
           if (validationResult.isValid) {
             row.push(partValue);
           } else {
@@ -1024,7 +1027,11 @@ import {
         parts.forEach((partValue, index) => {
           const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule, convention);
+          const validationResult = validatePart(
+            partValue,
+            colRule,
+            conventionRules,
+          );
           if (validationResult.isValid) {
             row.push(`"${partValue}"`);
           } else {
