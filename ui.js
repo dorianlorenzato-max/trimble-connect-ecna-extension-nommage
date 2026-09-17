@@ -810,7 +810,11 @@ function renderNamingControlTable(documents, conventionRules, smartParser) {
       const cells = parts
         .map((partValue, index) => {
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule, convention);
+          const validationResult = validatePart(
+            partValue,
+            colRule,
+            conventionRules,
+          );
           const cellClass = validationResult.isValid ? "" : "invalid-cell";
           const tooltipTitle = validationResult.isValid
             ? ""
