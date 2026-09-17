@@ -650,6 +650,9 @@ function updateAssignmentPanel(folder, allRuleNames, currentAssignedRule) {
 
 function validatePart(value, rule, convention) {
   // <-- 1. La convention est maintenant un paramètre
+  // --- SONDE DE DÉBOGAGE ---
+  console.log(`[validatePart] Validation de : "${value}"`, { rule: rule });
+
   value = value || ""; // S'assurer que la valeur n'est pas null/undefined
 
   // --- 2. Identifier les séparateurs interdits ---
@@ -659,10 +662,20 @@ function validatePart(value, rule, convention) {
     .filter((sep) => sep && sep !== "\u200B"); // Exclut les séparateurs nuls ou invisibles
 
   // --- 3. Vérifier la présence de ces séparateurs dans la valeur ---
+  // --- SONDE DE DÉBOGAGE ---
+  console.log(
+    `[validatePart] Séparateurs visibles interdits :`,
+    activeVisibleSeparators,
+  );
+
   for (const separator of activeVisibleSeparators) {
     if (value.includes(separator)) {
       // Permet au champ d'être égal au séparateur (cas rare mais possible)
       if (value !== separator) {
+        // --- SONDE DE DÉBOGAGE ---
+        console.error(
+          `[validatePart] ERREUR : La valeur "${value}" contient le séparateur interdit "${separator}".`,
+        );
         return {
           isValid: false,
           reason: `Le caractère "${separator}" est utilisé comme séparateur et ne peut pas être dans ce champ.`,
