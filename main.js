@@ -581,7 +581,7 @@ import {
 
       // 1. On ne convertit PLUS la casse automatiquement ici. La validation pure se fait dans validatePart.
 
-      const validationResult = validatePart(value, colRule);
+      const validationResult = validatePart(value, colRule, convention);
 
       if (validationResult.isValid) {
         input.classList.remove("invalid-input");
@@ -828,11 +828,24 @@ import {
     // <-- 1. La convention est maintenant un paramètre
     value = value || ""; // S'assurer que la valeur n'est pas null/undefined
 
-    // --- 2. On identifie tous les séparateurs actifs et visibles dans la convention ---
-    const activeSeparators = convention.columns
-      .map((c) => c.separator)
-      .filter((s) => s && s !== "\u200B"); // On ne garde que les séparateurs définis et visibles
+    // --- 2. Identifier les séparateurs interdits ---
+    // On récupère tous les séparateurs définis et visibles de la convention.
+    const activeVisibleSeparators = convention.columns
+      .map((col) => col.separator)
+      .filter((sep) => sep && sep !== "\u200B"); // Exclut les séparateurs nuls ou invisibles
 
+    // --- 3. Vérifier la présence de ces séparateurs dans la valeur ---
+    for (const separator of activeVisibleSeparators) {
+      if (value.includes(separator)) {
+        // Permet au champ d'être égal au séparateur (cas rare mais possible)
+        if (value !== separator) {
+          return {
+            isValid: false,
+            reason: `Le caractère "${separator}" est utilisé comme séparateur et ne peut pas être dans ce champ.`,
+          };
+        }
+      }
+    }
     // Gérer le cas "obligatoire" mais vide
     if (rule.required && value === "") {
       return { isValid: false, reason: "Valeur obligatoire manquante" };
@@ -841,20 +854,6 @@ import {
     // Si non-obligatoire et vide, c'est toujours valide
     if (!rule.required && value === "") {
       return { isValid: true };
-    }
-
-    // --- 3. On ajoute la vérification pour TOUS les types de champs ---
-    // Un champ ne doit JAMAIS contenir un séparateur actif, sauf si c'est sa propre valeur (cas très rare)
-    for (const sep of activeSeparators) {
-      if (value.includes(sep)) {
-        // On vérifie que la valeur n'est pas exactement le séparateur lui-même, ce qui pourrait être un cas valide.
-        if (value !== sep) {
-          return {
-            isValid: false,
-            reason: `Ne peut pas contenir le séparateur "${sep}" qui est utilisé dans la convention.`,
-          };
-        }
-      }
     }
 
     // Validation par type (le reste de votre logique)
@@ -868,12 +867,20 @@ import {
         }
         break;
       case "alphabetic":
-        // ... (votre logique inchangée)
-        break;
+        if (!/^[a-zA-Z]+$/.test(value)) {
+          return {
+            isValid: false,
+            reason: "Doit contenir uniquement des lettres.",
+          };
+        }
+        if (rule.case === "upper" && value !== value.toUpperCase()) {
+          return { isValid: false, reason: "Doit être en majuscules." };
+        }
+        if (rule.case === "lower" && value !== value.toLowerCase()) {
+          return { isValid: false, reason: "Doit être en minuscules." };
+        }
 
-      // Note : Nous n'avons plus besoin d'un cas "alphanumeric" spécifique,
-      // car la logique de vérification des séparateurs a déjà été faite en amont pour tous les types.
-      // Un "Texte libre" ne passe donc par aucune validation de caractères ici, ce qui est le comportement attendu.
+        break;
 
       case "list":
         if (!rule.values.some((v) => v.value === value)) {
@@ -887,7 +894,38 @@ import {
 
     // Validation par longueur (votre logique inchangée)
     if (rule.lengthConstraint && rule.lengthConstraint.type !== "none") {
-      // ...
+      const lc = rule.lengthConstraint;
+      const len = value.length;
+      switch (lc.type) {
+        case "exact":
+          if (len !== lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir exactement ${lc.value1} caractères.`,
+            };
+          break;
+        case "min":
+          if (len < lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir au moins ${lc.value1} caractères.`,
+            };
+          break;
+        case "max":
+          if (len > lc.value1)
+            return {
+              isValid: false,
+              reason: `Doit avoir au plus ${lc.value1} caractères.`,
+            };
+          break;
+        case "range":
+          if (len < lc.value1 || len > lc.value2)
+            return {
+              isValid: false,
+              reason: `Doit avoir entre ${lc.value1} et ${lc.value2} caractères.`,
+            };
+          break;
+      }
     }
 
     return { isValid: true }; // Si toutes les validations passent
@@ -936,7 +974,7 @@ import {
         parts.forEach((partValue, index) => {
           const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule);
+          const validationResult = validatePart(partValue, colRule, convention);
           if (validationResult.isValid) {
             row.push(partValue);
           } else {
@@ -986,7 +1024,7 @@ import {
         parts.forEach((partValue, index) => {
           const cleanPartValue = (partValue || "").replace(/\u200B/g, "");
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule);
+          const validationResult = validatePart(partValue, colRule, convention);
           if (validationResult.isValid) {
             row.push(`"${partValue}"`);
           } else {
@@ -1668,113 +1706,113 @@ import {
     let remainingFileString = filename.replace(/\.[^/.]+$/, ""); // Enlève l'extension
     const finalParts = [];
 
-    // ---------------------------------------------------------------------------------
-    // Étape 1: Groupement des colonnes par blocs (inchangé)
-    // ---------------------------------------------------------------------------------
+    if (!columns || columns.length === 0) {
+      return [];
+    }
+
+    // --- Étape 1 & 2 : Grouper les colonnes par "blocs" (séparés par des séparateurs visibles) ---
     const columnGroups = [];
     let currentGroup = [];
     for (const column of columns) {
       currentGroup.push(column);
-      // Le séparateur VRAIMENT visible est celui qui n'est pas un ZWSP
+      // Si un séparateur VISIBLE est trouvé, on ferme le groupe actuel et on en commence un nouveau.
       if (column.separator && column.separator !== "\u200B") {
         columnGroups.push({
           columns: currentGroup,
-          separator: column.separator,
+          separator: column.separator, // Le séparateur qui termine ce bloc
         });
         currentGroup = [];
       }
     }
+    // Ajoute le dernier groupe qui n'a pas de séparateur visible à sa fin.
     if (currentGroup.length > 0) {
       columnGroups.push({ columns: currentGroup, separator: null });
     }
 
-    // ---------------------------------------------------------------------------------
-    // Étape 2: Découpage Séquentiel Strict par Frontière Attendue
-    // ---------------------------------------------------------------------------------
+    // --- Étape 3 & 4 : Traiter la chaîne bloc par bloc ---
     for (let i = 0; i < columnGroups.length; i++) {
       const group = columnGroups[i];
-      const columnsInGroup = group.columns;
       let blockToParse = "";
 
       const endingSeparator = group.separator;
+      // Si ce bloc est censé se terminer par un séparateur visible...
       if (endingSeparator) {
         const separatorIndex = remainingFileString.indexOf(endingSeparator);
+        // Si on trouve ce séparateur
         if (separatorIndex !== -1) {
           blockToParse = remainingFileString.substring(0, separatorIndex);
           remainingFileString = remainingFileString.substring(
             separatorIndex + endingSeparator.length,
           );
         } else {
+          // Si on ne trouve pas le séparateur attendu, ce bloc prend tout ce qui reste.
+          // L'erreur sera détectée lors de la validation des parties.
           blockToParse = remainingFileString;
           remainingFileString = "";
         }
       } else {
+        // C'est le dernier bloc, il prend tout ce qui reste.
         blockToParse = remainingFileString;
         remainingFileString = "";
       }
 
-      // ---------------------------------------------------------------------------------
-      // Étape 3: Analyse Interne des Blocs (plus robuste)
-      // ---------------------------------------------------------------------------------
-      for (let j = 0; j < columnsInGroup.length; j++) {
-        const columnRule = columnsInGroup[j];
-        let segment = "";
-
-        if (blockToParse.length === 0) {
+      // --- Étape 5, 6 & 7 : Analyser à l'intérieur du bloc (logique des séparateurs invisibles) ---
+      let remainingBlockString = blockToParse;
+      for (const columnRule of group.columns) {
+        // Si le bloc est vide, tous les champs restants sont vides.
+        if (remainingBlockString.length === 0) {
           finalParts.push("");
           continue;
         }
 
-        // Si c'est la dernière colonne du groupe, elle prend tout ce qui reste du bloc.
-        if (j === columnsInGroup.length - 1) {
-          segment = blockToParse;
-        }
-        // Logique de découpe à l'intérieur d'un bloc (séparateurs invisibles)
-        else {
-          let bestMatchLength = 0;
-          // Priorité 1: Longueur exacte
-          if (columnRule.lengthConstraint?.type === "exact") {
-            bestMatchLength = columnRule.lengthConstraint.value1;
-          }
-          // Priorité 2: Liste de valeurs
-          else if (columnRule.type === "list") {
-            const matches = columnRule.values
-              .map((v) => v.value)
-              .filter((v) => blockToParse.startsWith(v))
-              .sort((a, b) => b.length - a.length);
-            if (matches.length > 0) {
-              bestMatchLength = matches[0].length;
-            }
-          }
+        let segment = "";
+        let consumedLength = 0;
 
-          if (bestMatchLength > 0) {
-            segment = blockToParse.substring(0, bestMatchLength);
-          } else {
-            // Cas ambigu: colonne texte libre au milieu d'un bloc. On la considère vide.
-            segment = "";
+        // Priorité 1: Si c'est le DERNIER champ du bloc, il prend tout ce qui reste.
+        const isLastInGroup =
+          group.columns.indexOf(columnRule) === group.columns.length - 1;
+        if (isLastInGroup) {
+          consumedLength = remainingBlockString.length;
+        }
+        // Priorité 2: Contrainte de longueur exacte.
+        else if (columnRule.lengthConstraint?.type === "exact") {
+          consumedLength = columnRule.lengthConstraint.value1;
+        }
+        // Priorité 3: Valeur issue d'une liste. On cherche la correspondance la plus longue.
+        else if (columnRule.type === "list") {
+          const matches = columnRule.values
+            .map((v) => v.value)
+            .filter((v) => remainingBlockString.startsWith(v))
+            .sort((a, b) => b.length - a.length); // Tri pour trouver le plus long match
+
+          if (matches.length > 0) {
+            consumedLength = matches[0].length;
           }
         }
 
-        // Validation et gestion des optionnels
-        const isSegmentValid = validatePart(
-          segment,
-          columnRule,
-          convention,
-        ).isValid;
-        if (isSegmentValid) {
-          finalParts.push(segment);
-          blockToParse = blockToParse.substring(segment.length);
+        // Si on a pu déterminer une longueur, on extrait le segment.
+        if (
+          consumedLength > 0 &&
+          remainingBlockString.length >= consumedLength
+        ) {
+          segment = remainingBlockString.substring(0, consumedLength);
+          remainingBlockString = remainingBlockString.substring(consumedLength);
         } else {
-          if (!columnRule.required) {
-            finalParts.push(""); // Colonne optionnelle qui ne correspond pas, on la saute
-          } else {
-            finalParts.push(segment); // Colonne obligatoire, on pousse le segment invalide pour l'affichage de l'erreur
-            blockToParse = blockToParse.substring(segment.length);
-          }
+          // Cas ambigu (ex: Texte Libre au milieu d'un bloc sans contrainte).
+          // On le considère vide pour ne pas perturber la suite. L'erreur sera levée par la validation si le champ est obligatoire.
+          segment = "";
         }
+
+        finalParts.push(segment);
       }
     }
-    return finalParts;
+
+    // S'assurer qu'on a bien une "partie" pour chaque colonne, même si elles sont vides.
+    while (finalParts.length < columns.length) {
+      finalParts.push("");
+    }
+
+    return finalParts.slice(0, columns.length); // Garantit de ne jamais retourner plus de parties que de colonnes.
   }
   // === FIN DE L'AJOUT ===
   const rerenderPage = () => {
