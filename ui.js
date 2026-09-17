@@ -648,58 +648,111 @@ function updateAssignmentPanel(folder, allRuleNames, currentAssignedRule) {
   `;
 }
 
-function validatePart(value, rule) {
-  // 1. Gérer le cas "non obligatoire"
-  if (!rule.required && !value) {
-    return { isValid: true }; // Si la valeur est vide et non requise, c'est valide.
-  }
+function validatePart(value, rule, convention) {
+  // <-- 1. La convention est maintenant un paramètre
+  value = value || ""; // S'assurer que la valeur n'est pas null/undefined
 
-  // 2. Gérer le cas "obligatoire" mais vide
-  if (rule.required && !value) {
+  // --- 2. Identifier les séparateurs interdits ---
+  // On récupère tous les séparateurs définis et visibles de la convention.
+  const activeVisibleSeparators = convention.columns
+    .map((col) => col.separator)
+    .filter((sep) => sep && sep !== "\u200B"); // Exclut les séparateurs nuls ou invisibles
+
+  // --- 3. Vérifier la présence de ces séparateurs dans la valeur ---
+  for (const separator of activeVisibleSeparators) {
+    if (value.includes(separator)) {
+      // Permet au champ d'être égal au séparateur (cas rare mais possible)
+      if (value !== separator) {
+        return {
+          isValid: false,
+          reason: `Le caractère "${separator}" est utilisé comme séparateur et ne peut pas être dans ce champ.`,
+        };
+      }
+    }
+  }
+  // Gérer le cas "obligatoire" mais vide
+  if (rule.required && value === "") {
     return { isValid: false, reason: "Valeur obligatoire manquante" };
   }
 
-  // 3. Validation par type
-  switch (rule.type) {
-    case "text":
-      return { isValid: true }; // Le texte libre est toujours valide s'il n'est pas vide
-    case "list":
-      const isValid = rule.values.some((v) => v.value === value);
-      return {
-        isValid,
-        reason: isValid
-          ? ""
-          : `La valeur "${value}" n'est pas dans la liste autorisée.`,
-      };
-    case "number1":
-      const isNumber1 = /^\d{1}$/.test(value);
-      return {
-        isValid: isNumber1,
-        reason: isNumber1 ? "" : "Doit être un chiffre unique.",
-      };
-    case "number2":
-      const isNumber2 = /^\d{2}$/.test(value);
-      return {
-        isValid: isNumber2,
-        reason: isNumber2 ? "" : "Doit être composé de 2 chiffres.",
-      };
-    case "number3":
-      const isNumber3 = /^\d{3}$/.test(value);
-      return {
-        isValid: isNumber3,
-        reason: isNumber3 ? "" : "Doit être composé de 3 chiffres.",
-      };
-    case "trigram":
-      const isTrigram = /^[A-Z]{3}$/.test(value);
-      return {
-        isValid: isTrigram,
-        reason: isTrigram
-          ? ""
-          : "Doit être un trigramme en majuscules (3 lettres).",
-      };
-    default:
-      return { isValid: true }; // Type inconnu, on ne bloque pas
+  // Si non-obligatoire et vide, c'est toujours valide
+  if (!rule.required && value === "") {
+    return { isValid: true };
   }
+
+  // Validation par type (le reste de votre logique)
+  switch (rule.type) {
+    case "numeric":
+      if (!/^\d+$/.test(value)) {
+        return {
+          isValid: false,
+          reason: "Doit contenir uniquement des chiffres.",
+        };
+      }
+      break;
+    case "alphabetic":
+      if (!/^[a-zA-Z]+$/.test(value)) {
+        return {
+          isValid: false,
+          reason: "Doit contenir uniquement des lettres.",
+        };
+      }
+      if (rule.case === "upper" && value !== value.toUpperCase()) {
+        return { isValid: false, reason: "Doit être en majuscules." };
+      }
+      if (rule.case === "lower" && value !== value.toLowerCase()) {
+        return { isValid: false, reason: "Doit être en minuscules." };
+      }
+
+      break;
+
+    case "list":
+      if (!rule.values.some((v) => v.value === value)) {
+        return {
+          isValid: false,
+          reason: `La valeur "${value}" n'est pas dans la liste autorisée.`,
+        };
+      }
+      break;
+  }
+
+  // Validation par longueur (votre logique inchangée)
+  if (rule.lengthConstraint && rule.lengthConstraint.type !== "none") {
+    const lc = rule.lengthConstraint;
+    const len = value.length;
+    switch (lc.type) {
+      case "exact":
+        if (len !== lc.value1)
+          return {
+            isValid: false,
+            reason: `Doit avoir exactement ${lc.value1} caractères.`,
+          };
+        break;
+      case "min":
+        if (len < lc.value1)
+          return {
+            isValid: false,
+            reason: `Doit avoir au moins ${lc.value1} caractères.`,
+          };
+        break;
+      case "max":
+        if (len > lc.value1)
+          return {
+            isValid: false,
+            reason: `Doit avoir au plus ${lc.value1} caractères.`,
+          };
+        break;
+      case "range":
+        if (len < lc.value1 || len > lc.value2)
+          return {
+            isValid: false,
+            reason: `Doit avoir entre ${lc.value1} et ${lc.value2} caractères.`,
+          };
+        break;
+    }
+  }
+
+  return { isValid: true }; // Si toutes les validations passent
 }
 
 function renderControlPage(
@@ -757,7 +810,7 @@ function renderNamingControlTable(documents, conventionRules, smartParser) {
       const cells = parts
         .map((partValue, index) => {
           const colRule = conventionRules.columns[index];
-          const validationResult = validatePart(partValue, colRule);
+          const validationResult = validatePart(partValue, colRule, convention);
           const cellClass = validationResult.isValid ? "" : "invalid-cell";
           const tooltipTitle = validationResult.isValid
             ? ""
